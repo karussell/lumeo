@@ -8,6 +8,7 @@ import com.tinkerpop.blueprints.pgm.IndexableGraph;
 import com.tinkerpop.blueprints.pgm.TransactionalGraph;
 import com.tinkerpop.blueprints.pgm.Vertex;
 
+import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -16,8 +17,11 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
 import org.apache.lucene.document.NumericField;
 import org.apache.lucene.store.RAMDirectory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A Blueprints implementation of the Search Engine Apache Lucene (http://lucene.apache.org)
@@ -48,6 +52,7 @@ import org.apache.lucene.store.RAMDirectory;
  */
 public class LuceneGraph implements TransactionalGraph, IndexableGraph {
 
+    private Logger logger = LoggerFactory.getLogger(getClass());
     private AtomicLong atomicCounter = new AtomicLong(1);
     private RawLucene rawLucene;
     private Map<Class, Index<? extends Element>> indices = new ConcurrentHashMap<Class, Index<? extends Element>>();
@@ -64,13 +69,14 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         rawLucene = rl;
     }
 
-    @Override
-    public <T extends Element> Index<T> createManualIndex(final String indexName, final Class<T> indexClass) {
-        throw new UnsupportedOperationException("use automatic indices instead for all things");
+    @Override public <T extends Element> Index<T> 
+    createManualIndex(final String indexName, final Class<T> indexClass) {
+        logger.warn("use automatic indices of manual indices");
+        return createAutomaticIndex(indexName, indexClass, null);
     }
 
-    @Override
-    public synchronized <T extends Element> AutomaticIndex<T> createAutomaticIndex(final String indexName, final Class<T> indexClass, Set<String> keys) {
+    @Override public synchronized <T extends Element> AutomaticIndex<T> 
+    createAutomaticIndex(final String indexName, final Class<T> indexClass, Set<String> keys) {
         if (indices.containsKey(indexClass))
             throw new UnsupportedOperationException("index already exists:" + indexName);
 
@@ -79,8 +85,8 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         return index;
     }
 
-    @Override
-    public <T extends Element> Index<T> getIndex(final String indexName, final Class<T> indexClass) {
+    @Override public <T extends Element> Index<T> 
+    getIndex(final String indexName, final Class<T> indexClass) {
         Index i = indices.get(indexClass);
         if (i == null)
             throw new UnsupportedOperationException("index not found " + indexName + " " + indexClass);
@@ -88,8 +94,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         return (Index<T>) i;
     }
 
-    @Override
-    public void dropIndex(final String indexName) {
+    @Override public void dropIndex(final String indexName) {
         Iterator<Index<?>> iter = indices.values().iterator();
         while (iter.hasNext()) {
             if (iter.next().getIndexName().equals(indexName)) {
@@ -99,13 +104,11 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         }
     }
 
-    @Override
-    public Iterable<Index<? extends Element>> getIndices() {
+    @Override public Iterable<Index<? extends Element>> getIndices() {
         return indices.values();
     }
 
-    @Override
-    public Vertex addVertex(Object userIdObj) {
+    @Override public Vertex addVertex(Object userIdObj) {
         try {
             String userId;
             long id = -1;
@@ -123,8 +126,8 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
                 if (id < 0)
                     id = atomicCounter.incrementAndGet();
 
-                rawLucene.put(userId, id);
                 doc = rawLucene.createDocument(userId, id);
+                rawLucene.put(userId, id, doc, false);
             }
 
             final Vertex vertex = new LuceneVertex(this, doc);
@@ -136,8 +139,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         }
     }
 
-    @Override
-    public Vertex getVertex(final Object id) {
+    @Override public Vertex getVertex(final Object id) {
         Document doc = rawLucene.findByUserId(id.toString());
         if (doc == null)
             return null;
@@ -175,16 +177,25 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
                 if (id < 0)
                     id = atomicCounter.incrementAndGet();
 
-                rawLucene.put(userId, id);
                 edgeDoc = rawLucene.createDocument(userId, id);
-            }
-
-            final Edge edge = new LuceneEdge(this, edgeDoc);
-            return edge;
+                edgeDoc.add(new Field(RawLucene.EDGE_LABEL, label, Field.Store.YES, Field.Index.NOT_ANALYZED_NO_NORMS));                
+            }                        
+            
+            rawLucene.initRelation(edgeDoc, ((LuceneElement) outVertex).getRaw(), ((LuceneElement) inVertex).getRaw()); 
+            rawLucene.put(userId, id, edgeDoc, false);
+            return new LuceneEdge(this, edgeDoc);
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
             throw new RuntimeException(e.getMessage(), e);
+        }
+    }
+
+    public void flush() {
+        try {
+            rawLucene.flush();
+        } catch (IOException ex) {
+            throw new RuntimeException(ex);
         }
     }
 
@@ -196,9 +207,8 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         return new LuceneEdge(this, doc);
     }
 
-    @Override
-    public void removeEdge(final Edge edge) {
-        throw new UnsupportedOperationException();
+    @Override public void removeEdge(final Edge edge) {
+        throw new UnsupportedOperationException("not yet supported");
     }
 
      <T extends Element> Collection<LuceneAutomaticIndex<T>> getAutoIndices(Class<T> cl) {
@@ -208,13 +218,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         return tmp;
     }
 
-    @Override public void startTransaction() {
-    }
-
-    @Override public void stopTransaction(final Conclusion conclusion) {
-    }
-
-    @Override public int getMaxBufferSize() {
+     @Override public int getMaxBufferSize() {
         // TODO not really the correct values ...
         return rawLucene.getMaxMergeMB() * 1024 * 1024;
     }
@@ -224,8 +228,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         return rawLucene.getMaxNumRecordsBeforeCommit() * 5 * 1024;
     }
 
-    @Override
-    public void setMaxBufferSize(final int size) {
+    @Override public void setMaxBufferSize(final int size) {
         rawLucene.setMaxMergeMB(size / 1024 / 1024);
     }
 
@@ -241,10 +244,10 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         }
     }
 
-    protected void autoStartTransaction() {
+    @Override public void startTransaction() {
     }
 
-    protected void autoStopTransaction(final Conclusion conclusion) {
+    @Override public void stopTransaction(final Conclusion conclusion) {
     }
 
     public RawLucene getRaw() {
@@ -252,8 +255,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
     }
 
     @Override public String toString() {
-        throw new UnsupportedOperationException();
-//        return StringFactory.graphString(this, this.rawGraph.toString());
+        return rawLucene.toString();
     }
 
     long count(String fieldName, String value) {
@@ -261,7 +263,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
     }
 
     public Vertex getOutVertex(LuceneEdge e) {
-        long id = ((NumericField) e.getRawElement().getFieldable(RawLucene.VERTEX_OUT)).getNumericValue().longValue();
+        long id = ((NumericField) e.getRaw().getFieldable(RawLucene.VERTEX_OUT)).getNumericValue().longValue();
         Document doc = rawLucene.findById(id);
         if (doc == null)
             throw new NullPointerException("Didn't found out vertex of edge with id " + id);
@@ -269,14 +271,14 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
     }
 
     public Vertex getInVertex(LuceneEdge e) {
-        long id = ((NumericField) e.getRawElement().getFieldable(RawLucene.VERTEX_IN)).getNumericValue().longValue();
+        long id = ((NumericField) e.getRaw().getFieldable(RawLucene.VERTEX_IN)).getNumericValue().longValue();
         Document doc = rawLucene.findById(id);
         if (doc == null)
             throw new NullPointerException("Didn't found in vertex of edge with id " + id);
         return new LuceneVertex(this, doc);
     }
 
-    Iterable<Edge> getEdges(Document rawElement, String edgeType) {
-        return new EdgeSequence(this, rawElement, edgeType);
+    void refresh() {
+        rawLucene.refresh();
     }
 }

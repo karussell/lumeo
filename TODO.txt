@@ -1,0 +1,2 @@
+make things thread safe: 
+    lock access to put - adding an edge is not an atomic access to the map

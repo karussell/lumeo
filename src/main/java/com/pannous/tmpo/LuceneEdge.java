@@ -25,7 +25,7 @@ public class LuceneEdge extends LuceneElement implements Edge {
     }
 
     @Override public String getLabel() {
-        return ((Document) this.rawElement).get(RawLucene.ID);
+        return ((Document) this.rawElement).get(RawLucene.EDGE_LABEL);
     }
 
     @Override public Vertex getOutVertex() {

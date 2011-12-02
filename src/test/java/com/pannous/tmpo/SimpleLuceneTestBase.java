@@ -34,7 +34,8 @@ public class SimpleLuceneTestBase {
         g.shutdown();
     }
 
-    protected void refresh() {
-        g.getRaw().refresh();
+    protected void flushAndRefresh() {
+        g.flush();
+        g.refresh();
     }
 }

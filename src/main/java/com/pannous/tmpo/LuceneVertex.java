@@ -17,12 +17,12 @@ public class LuceneVertex extends LuceneElement implements Vertex {
 
     @Override
     public Iterable<Edge> getInEdges(final String... labels) {
-        return graph.getEdges(this.rawElement, RawLucene.EDGE_IN);
+        return new EdgeSequence(graph, this.rawElement, RawLucene.EDGE_IN);
     }
 
     @Override
     public Iterable<Edge> getOutEdges(final String... labels) {
-        return graph.getEdges(this.rawElement, RawLucene.EDGE_OUT);
+        return new EdgeSequence(graph, this.rawElement, RawLucene.EDGE_OUT);
 //        if (labels.length == 0)
 //            return new LuceneEdgeSequence(((Document) this.rawElement).getRelationships(Direction.OUTGOING), this.graph);
 //        else if (labels.length == 1) {

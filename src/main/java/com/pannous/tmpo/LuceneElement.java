@@ -9,6 +9,7 @@ import java.util.Set;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.Fieldable;
+import org.apache.lucene.document.NumericField;
 
 /**
  * @author Peter Karich, info@jetsli.de
@@ -26,7 +27,7 @@ public abstract class LuceneElement implements Element {
     }
 
     @Override public Object getProperty(final String key) {
-        return this.rawElement.get(key);
+        return ((NumericField) this.rawElement.getFieldable(key)).getNumericValue().longValue();
     }
 
     @Override public void setProperty(final String key, final Object value) {
@@ -77,7 +78,7 @@ public abstract class LuceneElement implements Element {
         return this.getId().hashCode();
     }
 
-    public Document getRawElement() {
+    public Document getRaw() {
         return this.rawElement;
     }
 

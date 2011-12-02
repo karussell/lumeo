@@ -43,12 +43,10 @@ class EdgeSequence implements CloseableSequence<Edge> {
         if (doc == null)
             throw new NullPointerException("Document shouldn't be null");
         this.g = g;
-
         if (edgeTypes == null || edgeTypes.length == 0)
             edgeTypes = new String[]{RawLucene.EDGE_IN, RawLucene.EDGE_OUT};
 
         fieldables = new ArrayList<Fieldable>();
-
         for (Fieldable field : doc.getFields()) {
             if (field.name().equals(edgeTypes[0])
                     || edgeTypes.length > 1 && field.name().equals(edgeTypes[1]))

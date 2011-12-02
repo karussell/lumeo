@@ -28,7 +28,7 @@ import static org.junit.Assert.*;
  *
  * @author Peter Karich, info@jetsli.de
  */
-public class LuceneGraphTest extends SimpleLuceneTestBase {        
+public class LuceneGraphTest extends SimpleLuceneTestBase {
 
     @Test public void testCreateAutomaticIndex() {
         Set<String> set = new LinkedHashSet<String>();
@@ -55,7 +55,7 @@ public class LuceneGraphTest extends SimpleLuceneTestBase {
         set.add("fullname");
         AutomaticIndex<Vertex> index = g.createAutomaticIndex("keyword", Vertex.class, set);
         v.setProperty("fullname", "peter something");
-        refresh();
+        flushAndRefresh();
         index.get("fullname", "peter something");
 
         // Now do some lucene magic ...
@@ -64,7 +64,7 @@ public class LuceneGraphTest extends SimpleLuceneTestBase {
         set.add("fullnameText");
         index = g.createAutomaticIndex("standard", Vertex.class, set);
         v.setProperty("fullnameText", "peter something");
-        refresh();
+        flushAndRefresh();
         // ... and search via StandardAnalyzer!        
         index.get("fullnameText", "peter");
     }

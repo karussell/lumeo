@@ -15,6 +15,7 @@
  */
 package com.pannous.tmpo;
 
+import com.tinkerpop.blueprints.pgm.Edge;
 import com.tinkerpop.blueprints.pgm.Vertex;
 import org.junit.Test;
 import static org.junit.Assert.*;
@@ -25,22 +26,22 @@ import static org.junit.Assert.*;
  */
 public class EdgeSequenceTest extends SimpleLuceneTestBase {
 
-    @Test
-    public void testRemove() {
-    }
-
-    @Test
-    public void testIterator() {
+    @Test public void testIterator() {
         Vertex v1 = g.addVertex("peter");
         Vertex v2 = g.addVertex("timetabling");
-        g.addEdge(null, v1, v2, "twitteraccount");
+        g.addEdge("idEdge", v1, v2, "twitteraccount");
+        flushAndRefresh();
 
         EdgeSequence eSeq = new EdgeSequence(g, v1, RawLucene.EDGE_IN);
         assertFalse(eSeq.hasNext());
 
         eSeq = new EdgeSequence(g, v1, RawLucene.EDGE_IN, RawLucene.EDGE_OUT);
         assertTrue(eSeq.hasNext());
-        assertEquals("twitteraccount", eSeq.next().getLabel());
+        Edge e = eSeq.next();
+        assertEquals("twitteraccount", e.getLabel());
+        assertNotNull(e.getId());
+        assertTrue("id should of type long", e.getId() instanceof Long);
+
         assertFalse(eSeq.hasNext());
     }
 }

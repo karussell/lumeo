@@ -19,7 +19,6 @@ import com.tinkerpop.blueprints.pgm.Edge;
 import com.tinkerpop.blueprints.pgm.CloseableSequence;
 import com.tinkerpop.blueprints.pgm.Index;
 import com.tinkerpop.blueprints.pgm.Vertex;
-import org.apache.lucene.document.Document;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -28,11 +27,11 @@ import static org.junit.Assert.*;
  */
 public class LuceneIndexTest extends SimpleLuceneTestBase {
 
-    @Test
-    public void testPutVertex() {
-        Index<Vertex> index = g.createAutomaticIndex("", Vertex.class, null);
-        Vertex v = new LuceneVertex(g, new Document());
+    @Test public void testPutVertex() {
+        Index<Vertex> index = g.createAutomaticIndex("keyword", Vertex.class, null);
+        Vertex v = g.addVertex(null);
         index.put("name", "peter", v);
+        flushAndRefresh();
 
         CloseableSequence<Vertex> seq = index.get("name", "peter");
         assertTrue(seq.hasNext());
@@ -42,9 +41,12 @@ public class LuceneIndexTest extends SimpleLuceneTestBase {
     }
 
     @Test public void testPutEdge() {
-        Index<Edge> index = g.createAutomaticIndex("", Edge.class, null);
-        Edge v = new LuceneEdge(g, new Document());
-        index.put("name", "peter", v);
+        Index<Edge> index = g.createAutomaticIndex("keyword", Edge.class, null);
+        Vertex v1 = g.addVertex(null);        
+        Vertex v2 = g.addVertex(null);        
+        Edge e = g.addEdge("tmp", v1, v2, "testing");
+        index.put("name", "peter", e);
+        flushAndRefresh();
 
         CloseableSequence<Edge> seq = index.get("name", "peter");
         assertTrue(seq.hasNext());
@@ -52,16 +54,7 @@ public class LuceneIndexTest extends SimpleLuceneTestBase {
         assertFalse(seq.hasNext());
         seq.close();
     }
-
-    @Test
-    public void testCount() {
-    }
-
-    @Test
-    public void testRemove() {
-    }
-
-    @Test
-    public void testToString() {
+    
+    @Test public void testPutEdgeAndVertexButRetrieveOnlyOneType() {        
     }
 }

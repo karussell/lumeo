@@ -27,7 +27,7 @@ public abstract class LuceneElement implements Element {
     }
 
     @Override public Object getProperty(final String key) {
-        return ((NumericField) this.rawElement.getFieldable(key)).getNumericValue().longValue();
+        return rawElement.get(key);
     }
 
     @Override public void setProperty(final String key, final Object value) {
@@ -83,7 +83,7 @@ public abstract class LuceneElement implements Element {
     }
 
     @Override public Object getId() {
-        return getProperty(RawLucene.ID);
+        return ((NumericField) rawElement.getFieldable(RawLucene.ID)).getNumericValue().longValue();
     }
 
     @Override public boolean equals(final Object object) {

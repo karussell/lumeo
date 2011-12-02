@@ -189,7 +189,7 @@ public class RawLucene {
         IndexSearcher searcher = sm.acquire();
         try {
             return (T) exec.execute(searcher);
-        } catch (Exception e) {
+        } catch (Exception e) {            
             throw new RuntimeException(e);
         } finally {
             try {
@@ -254,23 +254,31 @@ public class RawLucene {
         });
     }
 
-    int removeById(final long id) {
-        return searchSomething(new SearchExecutor<Integer>() {
-
-            @Override public Integer execute(IndexSearcher searcher) throws Exception {
-                IndexReader reader = searcher.getIndexReader();
-                Term searchTerm = idTerm.createTerm(NumericUtils.longToPrefixCoded(id));
-                return reader.deleteDocuments(searchTerm);
-            }
-        });
+    long removeById(final long id) {
+        try {
+            return nrtManager.deleteDocuments(idTerm.createTerm(NumericUtils.longToPrefixCoded(id)));
+        } catch (IOException ex) {            
+            throw new RuntimeException(ex);
+        }
     }
 
-    public long put(String uId, long id, Document newDoc, boolean delete) throws Exception {
-        if (delete)
-            nrtManager.deleteDocuments(idTerm.createTerm(NumericUtils.longToPrefixCoded(id)));
+    public long fastPut(long id, Document newDoc) {
+        try {
+            batchBuffer.put(id, newDoc);
+            luceneAdds++;
+            long currentSearchGeneration = nrtManager.getCurrentSearchingGen(true);
+            if (batchBuffer.size() > maxNumRecordsBeforeIndexing)
+                currentSearchGeneration = flush();
 
-        if (uId == null)
-            throw new NullPointerException("uId cannot be null: " + uId);
+            return currentSearchGeneration;
+        } catch (Exception ex) {            
+            throw new RuntimeException(ex);
+        }
+    }
+
+    public long put(String uId, long id, Document newDoc, boolean delete) {
+        if (delete)
+            removeById(id);        
 
         if (newDoc.get(ID) == null)
             newDoc.add(newIdField(ID, id));
@@ -278,13 +286,7 @@ public class RawLucene {
         if (newDoc.get(UID) == null)
             newDoc.add(newUIdField(UID, uId));
 
-        batchBuffer.put(id, newDoc);
-        luceneAdds++;
-        long currentSearchGeneration = nrtManager.getCurrentSearchingGen(true);
-        if (batchBuffer.size() > maxNumRecordsBeforeIndexing)
-            currentSearchGeneration = flush();
-
-        return currentSearchGeneration;
+        return fastPut(id, newDoc);
     }
 
     public double getRamBufferSizeMB() {

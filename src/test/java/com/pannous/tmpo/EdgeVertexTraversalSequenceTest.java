@@ -21,7 +21,6 @@ import com.tinkerpop.blueprints.pgm.Vertex;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.QueryWrapperFilter;
 import org.apache.lucene.search.TermQuery;
-import org.apache.lucene.search.TermRangeFilter;
 import org.junit.Before;
 import org.junit.Test;
 import static org.junit.Assert.*;

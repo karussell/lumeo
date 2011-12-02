@@ -89,33 +89,4 @@ public class LuceneGraphTest extends SimpleLuceneTestBase {
         iter.next();
         assertFalse(iter.hasNext());
     }
-
-    @Test
-    public void testGetEdges() {
-    }
-
-    @Test
-    public void testRemoveVertex() {
-    }
-
-    @Test
-    public void testAddEdge() {
-    }
-
-    @Test
-    public void testGetEdge() {
-    }
-
-    @Test public void testRemoveEdge() {
-    }
-
-    @Test public void testClear() {
-    }
-
-    // skip for now
-    @Test public void testCreateManualIndex() {
-    }
-
-    @Test public void testDropIndex() {
-    }
 }

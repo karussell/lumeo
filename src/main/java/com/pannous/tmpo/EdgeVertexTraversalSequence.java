@@ -89,7 +89,8 @@ class EdgeVertexTraversalSequence implements CloseableSequence<Edge> {
 
     @Override
     public void close() {
-        edgeSeq.close();
+        if (edgeSeq != null)
+            edgeSeq.close();
         vertices.close();
     }
 }

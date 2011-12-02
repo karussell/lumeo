@@ -81,9 +81,9 @@ class VertexFilterSequence implements CloseableSequence<Vertex> {
             if (!hasNext())
                 throw new UnsupportedOperationException("no further element");
 
-            Document doc = searcher.doc(docs.scoreDocs[index++].doc);
             if (index >= docs.scoreDocs.length)
                 docs = searcher.searchAfter(docs.scoreDocs[n - 1], mAllQuery, filter, n);
+            Document doc = searcher.doc(docs.scoreDocs[index++].doc);
 
             return new LuceneVertex(g, doc);
         } catch (Exception ex) {

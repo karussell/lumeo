@@ -18,13 +18,6 @@ public class LuceneAutomaticIndex<T extends Element> extends LuceneIndex<T> impl
         this.autoIndexKeys = new HashSet<String>();
         if(keys != null)
             this.autoIndexKeys.addAll(keys);
-//        if (!this.loadKeyField()) {
-//            if (null != keys) {
-//                this.autoIndexKeys = new HashSet<String>();
-//                this.autoIndexKeys.addAll(keys);
-//            }
-//            this.saveKeyField();
-//        }
     }
 
     @Override public Type getIndexType() {

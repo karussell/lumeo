@@ -1,13 +1,11 @@
 package com.pannous.tmpo;
 
-import com.pannous.tmpo.util.SearchExecutor;
 import com.tinkerpop.blueprints.pgm.CloseableSequence;
 import com.tinkerpop.blueprints.pgm.Edge;
 import com.tinkerpop.blueprints.pgm.Element;
 import com.tinkerpop.blueprints.pgm.Index;
 import com.tinkerpop.blueprints.pgm.Vertex;
 import com.tinkerpop.blueprints.pgm.impls.StringFactory;
-import org.apache.lucene.search.IndexSearcher;
 
 /**
  * @author Peter Karich, info@jetsli.de
@@ -42,7 +40,7 @@ public class LuceneIndex<T extends Element> implements Index<T> {
     }
 
     @Override public void put(final String key, final Object value, final T element) {
-        element.setProperty(key, value);
+        element.setProperty(key, value);        
     }
 
     @Override public CloseableSequence<T> get(final String key, final Object value) {

@@ -1,2 +1,11 @@
-make things thread safe: 
-    lock access to put - adding an edge is not an atomic access to the map
+make tests passing
+
+add more tests for all methods
+make tests passing
+
+check if all methods are implemented
+make tests passing
+
+check if lucene searchers/readers are properly closed
+use blueprint tests to see what fails
+make things thread safe. lock access to put - adding an edge is not an atomic access to the map

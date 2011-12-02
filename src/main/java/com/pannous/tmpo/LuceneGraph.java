@@ -20,6 +20,7 @@ import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.NumericField;
 import org.apache.lucene.store.RAMDirectory;
+import org.apache.lucene.util.NumericUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -114,6 +115,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
             long id = -1;
             if (userIdObj == null) {
                 id = atomicCounter.incrementAndGet();
+                // use here NumericUtils.longToPrefixCoded() ?
                 userId = Long.toString(id);
             } else {
                 userId = userIdObj.toString();
@@ -130,8 +132,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
                 rawLucene.put(userId, id, doc, false);
             }
 
-            final Vertex vertex = new LuceneVertex(this, doc);
-            return vertex;
+            return new LuceneVertex(this, doc);            
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
@@ -165,6 +166,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
             long id = -1;
             if (userIdObj == null) {
                 id = atomicCounter.incrementAndGet();
+                // use here NumericUtils.longToPrefixCoded() ?
                 userId = Long.toString(id);
             } else {
                 userId = userIdObj.toString();
@@ -211,7 +213,8 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         throw new UnsupportedOperationException("not yet supported");
     }
 
-     <T extends Element> Collection<LuceneAutomaticIndex<T>> getAutoIndices(Class<T> cl) {
+     <T extends Element> Collection<LuceneAutomaticIndex<T>> 
+    getAutoIndices(Class<T> cl) {
         Collection<LuceneAutomaticIndex<T>> tmp = (Collection<LuceneAutomaticIndex<T>>) indices.get(cl);
         if (tmp == null)
             return Collections.EMPTY_LIST;

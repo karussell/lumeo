@@ -2,7 +2,6 @@ package com.pannous.tmpo;
 
 import com.tinkerpop.blueprints.pgm.Edge;
 import com.tinkerpop.blueprints.pgm.Element;
-import com.tinkerpop.blueprints.pgm.TransactionalGraph;
 import com.tinkerpop.blueprints.pgm.impls.StringFactory;
 
 import java.util.HashSet;
@@ -19,7 +18,10 @@ public abstract class LuceneElement implements Element {
     protected final LuceneGraph graph;
     protected Document rawElement;
 
-    public LuceneElement(final LuceneGraph graph) {
+    public LuceneElement(LuceneGraph graph, Document doc) {
+        if (doc == null)
+            throw new NullPointerException("Document must not be null");
+        this.rawElement = doc;
         this.graph = graph;
     }
 
@@ -38,12 +40,9 @@ public abstract class LuceneElement implements Element {
             }
 
             this.rawElement.add(new Field(key, value.toString(), Field.Store.NO, Field.Index.NOT_ANALYZED_NO_NORMS));
-            this.graph.autoStopTransaction(TransactionalGraph.Conclusion.SUCCESS);
         } catch (RuntimeException e) {
-            this.graph.autoStopTransaction(TransactionalGraph.Conclusion.FAILURE);
             throw e;
         } catch (Exception e) {
-            this.graph.autoStopTransaction(TransactionalGraph.Conclusion.FAILURE);
             throw new RuntimeException(e.getMessage(), e);
         }
     }

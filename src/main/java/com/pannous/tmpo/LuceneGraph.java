@@ -1,6 +1,5 @@
 package com.pannous.tmpo;
 
-import com.sun.org.apache.bcel.internal.generic.LoadClass;
 import com.tinkerpop.blueprints.pgm.AutomaticIndex;
 import com.tinkerpop.blueprints.pgm.Edge;
 import com.tinkerpop.blueprints.pgm.Element;
@@ -10,27 +9,48 @@ import com.tinkerpop.blueprints.pgm.TransactionalGraph;
 import com.tinkerpop.blueprints.pgm.Vertex;
 
 import java.util.Collection;
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.Iterator;
-import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.Field;
-import org.apache.lucene.document.Fieldable;
 import org.apache.lucene.document.NumericField;
 import org.apache.lucene.store.RAMDirectory;
 
 /**
  * A Blueprints implementation of the Search Engine Apache Lucene (http://lucene.apache.org)
- *
+ * 
+ * Why is this a nice idea?
+ * - Now in 3.5 there is a searchAfter method making deeply searches (at least a bit) better.
+ * - Terms are mapped to documents like edges in one node to other nodes (or edges). 
+ *   E.g. OrientGraphDB is baked by a document storage
+ * - We can make it distributed later on with the help of ElasticSearch. Then even enhance 
+ *   searching via stats, facets, putting different indices into different lucene indices etc
+ * - We can traverse the graph without the mismatch (two storages) currently seen 
+ *   e.g. in Neo4j + Lucene or infinity graph.
+ *   Also, in Neo4j it is easy to get nodes from a query but getting relationships is not easy
+ *   http://groups.google.com/group/neo4jrb/browse_thread/thread/8f739197886ecec7
+ * 
+ * Why is this a bad idea?
+ * - heavy alpha software
+ * - deletes and realtime results are not easy for search engines
+ * - no transaction support
+ * 
+ * TODO
+ * - caching is bad at the moment. also test advanced caching strategies (e.g. measure degree centrality, cluster   )
+ *   especially use FieldCache for user and long IDs
+ * - Use several tuning possibilities in Lucene
+ * - Reimplement a subset of the lucene functionality by using search trees in the graph?
+ * 
  * @author Peter Karich, info@jetsli.de
  */
 public class LuceneGraph implements TransactionalGraph, IndexableGraph {
 
     private AtomicLong atomicCounter = new AtomicLong(1);
-    private Set<String> indexableFields = new LinkedHashSet<String>();
     private RawLucene rawLucene;
+    private Map<Class, Index<? extends Element>> indices = new ConcurrentHashMap<Class, Index<? extends Element>>();
 
     public LuceneGraph() {
         this(new RawLucene(new RAMDirectory()).init());
@@ -45,44 +65,43 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
     }
 
     @Override
-    public synchronized <T extends Element> Index<T> createManualIndex(final String indexName, final Class<T> indexClass) {
-        throw new UnsupportedOperationException();
-//        if (this.indices.containsKey(indexName))
-//            throw new RuntimeException("Index already exists: " + indexName);
-//
-//        LuceneIndex index = new LuceneIndex(indexName, indexClass, this);
-//        this.indices.put(index.getIndexName(), index);
-//        return index;
+    public <T extends Element> Index<T> createManualIndex(final String indexName, final Class<T> indexClass) {
+        throw new UnsupportedOperationException("use automatic indices instead for all things");
     }
 
     @Override
     public synchronized <T extends Element> AutomaticIndex<T> createAutomaticIndex(final String indexName, final Class<T> indexClass, Set<String> keys) {
-        return (AutomaticIndex<T>) new LuceneAutomaticIndex<T>(indexName, indexClass, this, new HashSet<String>());
+        if (indices.containsKey(indexClass))
+            throw new UnsupportedOperationException("index already exists:" + indexName);
+
+        LuceneAutomaticIndex index = new LuceneAutomaticIndex<T>(indexName, indexClass, this, keys);
+        indices.put(indexClass, index);
+        return index;
     }
 
     @Override
     public <T extends Element> Index<T> getIndex(final String indexName, final Class<T> indexClass) {
-        return (Index<T>) new LuceneAutomaticIndex<T>(indexName, indexClass, this, new HashSet<String>());
+        Index i = indices.get(indexClass);
+        if (i == null)
+            throw new UnsupportedOperationException("index not found " + indexName + " " + indexClass);
+
+        return (Index<T>) i;
     }
 
     @Override
-    public synchronized void dropIndex(final String indexName) {
-        Iterator<String> iter = indexableFields.iterator();
-        String prefix = indexName + "_";
+    public void dropIndex(final String indexName) {
+        Iterator<Index<?>> iter = indices.values().iterator();
         while (iter.hasNext()) {
-            if (iter.next().startsWith(prefix))
+            if (iter.next().getIndexName().equals(indexName)) {
                 iter.remove();
+                break;
+            }
         }
     }
 
     @Override
     public Iterable<Index<? extends Element>> getIndices() {
-        throw new UnsupportedOperationException();
-//        List<Index<? extends Element>> list = new ArrayList<Index<? extends Element>>();
-//        for (final Index index : this.indices.values()) {
-//            list.add(index);
-//        }
-//        return list;
+        return indices.values();
     }
 
     @Override
@@ -90,11 +109,9 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         try {
             String userId;
             long id = -1;
-            String idStr = null;
             if (userIdObj == null) {
                 id = atomicCounter.incrementAndGet();
                 userId = Long.toString(id);
-                idStr = userId;
             } else {
                 userId = userIdObj.toString();
                 if (rawLucene.exists(userId))
@@ -103,17 +120,14 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
 
             Document doc = rawLucene.findByUserId(userId.toString());
             if (doc == null) {
-                if (idStr == null) {
+                if (id < 0)
                     id = atomicCounter.incrementAndGet();
-                    idStr = Long.toString(id);
-                }
 
-                doc = new Document();
-                doc.add(new Field(RawLucene.ID, idStr, Field.Store.YES, Field.Index.NOT_ANALYZED_NO_NORMS));
-                doc.add(new Field(RawLucene.UID, userId.toString(), Field.Store.YES, Field.Index.NOT_ANALYZED_NO_NORMS));
+                rawLucene.put(userId, id);
+                doc = rawLucene.createDocument(userId, id);
             }
 
-            final Vertex vertex = new LuceneVertex(doc, this);
+            final Vertex vertex = new LuceneVertex(this, doc);
             return vertex;
         } catch (RuntimeException e) {
             throw e;
@@ -125,104 +139,73 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
     @Override
     public Vertex getVertex(final Object id) {
         Document doc = rawLucene.findByUserId(id.toString());
-        if(doc == null)
+        if (doc == null)
             return null;
-        
-        return new LuceneVertex(doc, this);
+
+        return new LuceneVertex(this, doc);
     }
 
     @Override public Iterable<Vertex> getVertices() {
-        throw new UnsupportedOperationException();
-//        return new LuceneVertexSequence(this.rawGraph.getAllNodes(), this);
-    }
-
-    @Override public Iterable<Edge> getEdges() {
-        throw new UnsupportedOperationException();
-//        return new LuceneGraphEdgeSequence(this.rawGraph.getAllNodes(), this);
+        return new VertexFilterSequence(this);
     }
 
     @Override public void removeVertex(final Vertex vertex) {
-        throw new UnsupportedOperationException();
-//        final Long id = (Long) vertex.getId();
-//        final Node node = this.rawGraph.getNodeById(id);
-//        if (null != node) {
-//            try {
-//                AutomaticIndexHelper.removeElement(this, vertex);
-//                this.autoStartTransaction();
-//                for (final Edge edge : vertex.getInEdges()) {
-//                    ((Relationship) ((LuceneEdge) edge).getRawElement()).delete();
-//                }
-//                for (final Edge edge : vertex.getOutEdges()) {
-//                    ((Relationship) ((LuceneEdge) edge).getRawElement()).delete();
-//                }
-//                node.delete();
-//                this.autoStopTransaction(Conclusion.SUCCESS);
-//            } catch (RuntimeException e) {
-//                this.autoStopTransaction(TransactionalGraph.Conclusion.FAILURE);
-//                throw e;
-//            } catch (Exception e) {
-//                this.autoStopTransaction(TransactionalGraph.Conclusion.FAILURE);
-//                throw new RuntimeException(e.getMessage(), e);
-//            }
-//        }
+        rawLucene.removeById((Long) vertex.getId());
     }
 
-    @Override public Edge addEdge(final Object id, final Vertex outVertex, final Vertex inVertex, final String label) {
-        throw new UnsupportedOperationException();
-//        try {
-//            this.autoStartTransaction();
-//            final Node outNode = ((LuceneVertex) outVertex).getRawVertex();
-//            final Node inNode = ((LuceneVertex) inVertex).getRawVertex();
-//            final Relationship relationship = outNode.createRelationshipTo(inNode, DynamicRelationshipType.withName(label));
-//            final Edge edge = new LuceneEdge(relationship, this, true);
-//            this.autoStopTransaction(Conclusion.SUCCESS);
-//            return edge;
-//        } catch (RuntimeException e) {
-//            this.autoStopTransaction(TransactionalGraph.Conclusion.FAILURE);
-//            throw e;
-//        } catch (Exception e) {
-//            this.autoStopTransaction(TransactionalGraph.Conclusion.FAILURE);
-//            throw new RuntimeException(e.getMessage(), e);
-//        }
+    @Override public Iterable<Edge> getEdges() {
+        return new EdgeVertexTraversalSequence(this);
+    }
+
+    @Override public Edge addEdge(final Object userIdObj, final Vertex outVertex, final Vertex inVertex, final String label) {
+        try {
+            String userId;
+            long id = -1;
+            if (userIdObj == null) {
+                id = atomicCounter.incrementAndGet();
+                userId = Long.toString(id);
+            } else {
+                userId = userIdObj.toString();
+                if (rawLucene.exists(userId))
+                    throw new RuntimeException("Edge with user id already exists:" + userId);
+            }
+
+            Document edgeDoc = rawLucene.findByUserId(userId.toString());
+            if (edgeDoc == null) {
+                if (id < 0)
+                    id = atomicCounter.incrementAndGet();
+
+                rawLucene.put(userId, id);
+                edgeDoc = rawLucene.createDocument(userId, id);
+            }
+
+            final Edge edge = new LuceneEdge(this, edgeDoc);
+            return edge;
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException(e.getMessage(), e);
+        }
     }
 
     @Override public Edge getEdge(final Object id) {
-        throw new UnsupportedOperationException();
-//        if (null == id)
-//            throw new IllegalArgumentException("Element identifier cannot be null");
-//
-//        try {
-//            final Long longId;
-//            if (id instanceof Long)
-//                longId = (Long) id;
-//            else
-//                longId = Double.valueOf(id.toString()).longValue();
-//            return new LuceneEdge(this.rawGraph.getRelationshipById(longId), this);
-//        } catch (NotFoundException e) {
-//            return null;
-//        } catch (NumberFormatException e) {
-//            return null;
-//        }
+        Document doc = rawLucene.findByUserId(id.toString());
+        if (doc == null)
+            return null;
+
+        return new LuceneEdge(this, doc);
     }
 
-    @Override public void removeEdge(final Edge edge) {
+    @Override
+    public void removeEdge(final Edge edge) {
         throw new UnsupportedOperationException();
-//        try {
-//            AutomaticIndexHelper.removeElement(this, edge);
-//            this.autoStartTransaction();
-//            ((Relationship) ((LuceneEdge) edge).getRawElement()).delete();
-//            this.autoStopTransaction(Conclusion.SUCCESS);
-//        } catch (RuntimeException e) {
-//            this.autoStopTransaction(TransactionalGraph.Conclusion.FAILURE);
-//            throw e;
-//        } catch (Exception e) {
-//            this.autoStopTransaction(TransactionalGraph.Conclusion.FAILURE);
-//            throw new RuntimeException(e.getMessage(), e);
-//        }
     }
 
-    Collection<LuceneAutomaticIndex> getAutoIndices(Class cl) {
-        throw new UnsupportedOperationException();
+     <T extends Element> Collection<LuceneAutomaticIndex<T>> getAutoIndices(Class<T> cl) {
+        Collection<LuceneAutomaticIndex<T>> tmp = (Collection<LuceneAutomaticIndex<T>>) indices.get(cl);
+        if (tmp == null)
+            return Collections.EMPTY_LIST;
+        return tmp;
     }
 
     @Override public void startTransaction() {
@@ -233,16 +216,17 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
 
     @Override public int getMaxBufferSize() {
         // TODO not really the correct values ...
-        return rawLucene.getMaxMergeMB();
+        return rawLucene.getMaxMergeMB() * 1024 * 1024;
     }
 
     @Override public int getCurrentBufferSize() {
         // TODO not really the correct values ...
-        return rawLucene.getMaxNumRecordsBeforeCommit();
+        return rawLucene.getMaxNumRecordsBeforeCommit() * 5 * 1024;
     }
 
-    @Override public void setMaxBufferSize(final int size) {
-        rawLucene.setMaxMergeMB(size);
+    @Override
+    public void setMaxBufferSize(final int size) {
+        rawLucene.setMaxMergeMB(size / 1024 / 1024);
     }
 
     @Override public void shutdown() {
@@ -263,7 +247,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
     protected void autoStopTransaction(final Conclusion conclusion) {
     }
 
-    public RawLucene getRawLucene() {
+    public RawLucene getRaw() {
         return rawLucene;
     }
 
@@ -278,56 +262,21 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
 
     public Vertex getOutVertex(LuceneEdge e) {
         long id = ((NumericField) e.getRawElement().getFieldable(RawLucene.VERTEX_OUT)).getNumericValue().longValue();
-        return new LuceneVertex(rawLucene.findById(id), this);
+        Document doc = rawLucene.findById(id);
+        if (doc == null)
+            throw new NullPointerException("Didn't found out vertex of edge with id " + id);
+        return new LuceneVertex(this, doc);
     }
 
     public Vertex getInVertex(LuceneEdge e) {
         long id = ((NumericField) e.getRawElement().getFieldable(RawLucene.VERTEX_IN)).getNumericValue().longValue();
-        return new LuceneVertex(rawLucene.findById(id), this);
+        Document doc = rawLucene.findById(id);
+        if (doc == null)
+            throw new NullPointerException("Didn't found in vertex of edge with id " + id);
+        return new LuceneVertex(this, doc);
     }
 
     Iterable<Edge> getEdges(Document rawElement, String edgeType) {
-        return new EdgeIterable(rawElement, edgeType, this);
-    }
-
-    private static class EdgeIterable implements Iterable<Edge> {
-
-        private Document doc;
-        private String fieldName;
-        private LuceneGraph rl;
-
-        public EdgeIterable(Document rawElement, String edgeType, LuceneGraph rl) {
-            doc = rawElement;
-            fieldName = edgeType;
-            this.rl = rl;
-        }
-
-        @Override
-        public Iterator<Edge> iterator() {
-            return new Iterator<Edge>() {
-
-                Fieldable[] fieldables = doc.getFieldables(fieldName);
-                int index = 0;
-
-                @Override
-                public boolean hasNext() {
-                    return index < fieldables.length;
-                }
-
-                @Override
-                public Edge next() {
-                    if (!hasNext())
-                        throw new UnsupportedOperationException("no further element");
-
-                    long id = ((NumericField) fieldables[index++]).getNumericValue().longValue();
-                    return new LuceneEdge(rl.getRawLucene().findById(id), rl);
-                }
-
-                @Override
-                public void remove() {
-                    throw new UnsupportedOperationException("Not supported yet.");
-                }
-            };
-        }
+        return new EdgeSequence(this, rawElement, edgeType);
     }
 }

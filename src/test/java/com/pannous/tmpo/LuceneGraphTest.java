@@ -15,14 +15,12 @@
  */
 package com.pannous.tmpo;
 
+import com.tinkerpop.blueprints.pgm.AutomaticIndex;
 import java.util.Iterator;
 import com.tinkerpop.blueprints.pgm.CloseableSequence;
-import com.tinkerpop.blueprints.pgm.IndexableGraph;
 import com.tinkerpop.blueprints.pgm.Vertex;
 import java.util.LinkedHashSet;
 import java.util.Set;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -30,17 +28,7 @@ import static org.junit.Assert.*;
  *
  * @author Peter Karich, info@jetsli.de
  */
-public class LuceneGraphTest {
-
-    IndexableGraph g;
-
-    @Before public void setUp() {
-        g = new LuceneGraph();
-    }
-
-    @After public void tearDown() {
-        g.shutdown();
-    }
+public class LuceneGraphTest extends SimpleLuceneTestBase {        
 
     @Test public void testCreateAutomaticIndex() {
         Set<String> set = new LinkedHashSet<String>();
@@ -60,18 +48,40 @@ public class LuceneGraphTest {
         assertFalse(seq.hasNext());
     }
 
+    @Test public void testAutoUpdateVertex() {
+        Vertex v = g.addVertex("peter");
+        assertNotNull(v);
+        Set<String> set = new LinkedHashSet<String>();
+        set.add("fullname");
+        AutomaticIndex<Vertex> index = g.createAutomaticIndex("keyword", Vertex.class, set);
+        v.setProperty("fullname", "peter something");
+        refresh();
+        index.get("fullname", "peter something");
+
+        // Now do some lucene magic ...
+        set.clear();
+        // avoid confusion with fullname
+        set.add("fullnameText");
+        index = g.createAutomaticIndex("standard", Vertex.class, set);
+        v.setProperty("fullnameText", "peter something");
+        refresh();
+        // ... and search via StandardAnalyzer!        
+        index.get("fullnameText", "peter");
+    }
+
     @Test public void testAddVertex() {
         Vertex v = g.addVertex("peter");
         assertNotNull(v);
         assertNotNull(g.addVertex(null));
-        
+
+        g.getRaw().refresh();
         Vertex tmp = g.getVertex("peter");
         assertNotNull(tmp);
         assertEquals(v, tmp);
-        
+
         g.removeVertex(tmp);
         assertNull(g.getVertex("peter"));
-        
+
         Iterator<Vertex> iter = g.getVertices().iterator();
         assertTrue(iter.hasNext());
         iter.next();

@@ -11,9 +11,8 @@ import org.apache.lucene.document.Document;
  */
 public class LuceneVertex extends LuceneElement implements Vertex {
 
-    public LuceneVertex(Document doc, final LuceneGraph graph) {
-        super(graph);
-        this.rawElement = doc;
+    public LuceneVertex(LuceneGraph graph, Document doc) {
+        super(graph, doc);
     }
 
     @Override
@@ -39,7 +38,7 @@ public class LuceneVertex extends LuceneElement implements Vertex {
 
     @Override
     public boolean equals(final Object object) {
-        return object instanceof LuceneVertex && ((LuceneVertex) object).getId().equals(this.getId());
+        return object instanceof LuceneVertex && super.equals(object);
     }
 
     @Override
@@ -47,13 +46,7 @@ public class LuceneVertex extends LuceneElement implements Vertex {
         return StringFactory.vertexString(this);
     }
 
-    public Document getRawVertex() {
+    public Document getRaw() {
         return (Document) this.rawElement;
     }
-
-//    TODO
-//    @Override
-//    public int hashCode() {
-//        return ;
-//    }
 }

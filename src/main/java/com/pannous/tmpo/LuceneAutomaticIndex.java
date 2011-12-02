@@ -16,7 +16,8 @@ public class LuceneAutomaticIndex<T extends Element> extends LuceneIndex<T> impl
     public LuceneAutomaticIndex(final String name, final Class<T> indexClass, final LuceneGraph graph, final Set<String> keys) {
         super(name, indexClass, graph);
         this.autoIndexKeys = new HashSet<String>();
-        this.autoIndexKeys.addAll(keys);
+        if(keys != null)
+            this.autoIndexKeys.addAll(keys);
 //        if (!this.loadKeyField()) {
 //            if (null != keys) {
 //                this.autoIndexKeys = new HashSet<String>();

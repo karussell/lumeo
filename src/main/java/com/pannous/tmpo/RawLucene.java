@@ -16,21 +16,23 @@ package com.pannous.tmpo;
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import com.tinkerpop.blueprints.pgm.Vertex;
+import com.pannous.tmpo.util.CountCollector;
+import com.pannous.tmpo.util.SearchExecutor;
 import java.io.File;
 import java.io.IOException;
-import java.util.LinkedHashMap;
 
 
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.KeywordAnalyzer;
 import org.apache.lucene.analysis.WhitespaceAnalyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
+import org.apache.lucene.document.DateTools;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.Fieldable;
-import org.apache.lucene.document.NumericField;
 import org.apache.lucene.index.FieldInfo.IndexOptions;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
@@ -40,10 +42,12 @@ import org.apache.lucene.index.Term;
 import org.apache.lucene.index.TermDocs;
 import org.apache.lucene.queryParser.QueryParser;
 import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.NRTManager;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.SearcherManager;
+import org.apache.lucene.search.SearcherWarmer;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
-import org.apache.lucene.util.OpenBitSet;
 import org.apache.lucene.util.Version;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,14 +56,9 @@ import org.slf4j.LoggerFactory;
  * Taken from:
  * http://code.google.com/p/graphdb-load-tester/
  * 
- * Uses Lucene to store and retrieve vertex Ids keyed on a user-defined key.
- * Uses:
- * 1) A bloom filter "to know what we don't know"
- * 2) An LRU cache to remember commonly accessed values we do know
- * 3) Uses a buffer to accumulate uncommitted state
+ * Uses a buffer to accumulate uncommitted state.
  * 
- * Lucene takes care of the rest.
- * 
+ * @author Peter Karich, info@jetsli.de
  * @author Mark
  *
  */
@@ -75,26 +74,21 @@ public class RawLucene {
     public static final String EDGE_IN = "_ein";
     public static final String VERTEX_OUT = "_vout";
     public static final String VERTEX_IN = "_vin";
-    private Map<String, Document> batchBuffer = new LinkedHashMap<String, Document>();
+    private Map<String, Document> batchBuffer = new ConcurrentHashMap<String, Document>();
     private IndexWriter writer;
     private Directory dir;
-    private IndexReader reader;
+    private NRTManager nrtManager;
     private Term uIdTerm = new Term(UID, "");
     private Term idTerm = new Term(ID, "");
     private int bloomFilterSize = 50 * 1024 * 1024;
     private int maxNumRecordsBeforeIndexing = 500000;
-    private int lruCacheSize = 500000;
-    private OpenBitSet bloomFilter;
+//    private OpenBitSet bloomFilter;
     //Avoid Lucene performing "mega merges" with a finite limit on segments sizes that can be merged
     private int maxMergeMB = 3000;
-    //Stats for each batch of updates
-    private long bloomReadSaves = 0;
     private long luceneAdds = 0;
     private long failedLuceneReads = 0;
     private long successfulLuceneReads = 0;
     private long startTime = System.currentTimeMillis();
-    private boolean showDebug;
-    private boolean useCompoundFile = false;
     private double ramBufferSizeMB = 300;
     private int termIndexIntervalSize = 512;
     private Logger logger = LoggerFactory.getLogger(getClass());
@@ -117,11 +111,10 @@ public class RawLucene {
 
     public RawLucene init() {
         try {
-            bloomFilter = new OpenBitSet(bloomFilterSize);
-            IndexWriterConfig cfg = new IndexWriterConfig(VERSION, WHITESPACE_ANALYZER);
+            IndexWriterConfig cfg = new IndexWriterConfig(VERSION, KEYWORD_ANALYZER);
             LogByteSizeMergePolicy mp = new LogByteSizeMergePolicy();
             mp.setMaxMergeMB(getMaxMergeMB());
-            mp.setUseCompoundFile(useCompoundFile);
+            //mp.setUseCompoundFile(useCompoundFile);
             cfg.setRAMBufferSizeMB(ramBufferSizeMB);
             cfg.setTermIndexInterval(termIndexIntervalSize);
             cfg.setMergePolicy(mp);
@@ -131,26 +124,73 @@ public class RawLucene {
             // improve ID lookup via LUCENE 4.0 see http://blog.mikemccandless.com/2010/06/lucenes-pulsingcodec-on-primary-key.html
             // cfg.setCodecProvider()
             writer = new IndexWriter(dir, cfg);
+            nrtManager = new NRTManager(writer, new SearcherWarmer() {
+
+                @Override
+                public void warm(IndexSearcher s) throws IOException {
+                    // TODO get some random vertices via getVertices?
+                }
+            });
             return this;
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
-    public Document findById(long id) {
-        try {
-            reader = getReader();
-            Term searchTerm = idTerm.createTerm(Long.toString(id));
-            TermDocs td = reader.termDocs(searchTerm);
-            if (td.next()) {
-                Document doc = reader.document(td.doc());
-                successfulLuceneReads++;
-                return doc;
+    public Document findById(final long id) {
+        return searchSomething(new SearchExecutor<Document>() {
+
+            @Override public Document execute(IndexSearcher searcher) throws Exception {
+                IndexReader reader = searcher.getIndexReader();
+                Term searchTerm = idTerm.createTerm(Long.toString(id));
+                TermDocs td = reader.termDocs(searchTerm);
+                if (td.next()) {
+                    Document doc = reader.document(td.doc());
+                    successfulLuceneReads++;
+                    return doc;
+                }
+                failedLuceneReads++;
+                return null;
             }
-            failedLuceneReads++;
-            return null;
+        });
+    }
+
+    public Document findByUserId(final String uId) {
+        Document result = batchBuffer.get(uId);
+        if (result != null)
+            return result;
+
+        return searchSomething(new SearchExecutor<Document>() {
+
+            @Override public Document execute(IndexSearcher searcher) throws Exception {
+                IndexReader reader = searcher.getIndexReader();
+                Term searchTerm = uIdTerm.createTerm(uId);
+                TermDocs td = reader.termDocs(searchTerm);
+                if (td.next())
+                    return reader.document(td.doc());
+
+                return null;
+            }
+        });
+    }
+
+    long getCurrentGen() {
+        return nrtManager.getCurrentSearchingGen(true);
+    }
+
+    public <T> T searchSomething(SearchExecutor<T> exec) {
+        SearcherManager sm = nrtManager.getSearcherManager(true);
+        IndexSearcher searcher = sm.acquire();
+        try {
+            return (T) exec.execute(searcher);
         } catch (Exception e) {
             throw new RuntimeException(e);
+        } finally {
+            try {
+                sm.release(searcher);
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
         }
     }
 
@@ -158,72 +198,9 @@ public class RawLucene {
         return findByUserId(uId) != null;
     }
 
-    public Document findByUserId(String uId) {
-        int bloomKey = Math.abs(uId.hashCode() % bloomFilterSize);
-        if (!bloomFilter.fastGet(bloomKey)) {
-            //Not seen - fail
-            bloomReadSaves++;
-            return null;
-        }
-
-        Document result = batchBuffer.get(uId);
-        if (result != null)
-            return result;
-
-        try {
-            reader = getReader();
-            Term searchTerm = uIdTerm.createTerm(uId);
-            TermDocs td = reader.termDocs(searchTerm);
-            if (td.next())
-                return reader.document(td.doc());
-
-            return null;
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public void put(String uId, long id) {
-        try {
-            if (batchBuffer.size() > maxNumRecordsBeforeIndexing) {
-                writer.commit();
-                if (reader != null) {
-                    IndexReader newReader = IndexReader.openIfChanged(reader, true);
-                    if (newReader != null) {
-                        reader.close();
-                        reader = newReader;
-                    }
-                }
-                batchBuffer.clear();
-
-                if (showDebug) {
-                    long diff = System.currentTimeMillis() - startTime;
-                    logger.info(diff + "," + reader.maxDoc() + "," + bloomReadSaves + "," + failedLuceneReads + "," + successfulLuceneReads + "," + luceneAdds);
-                }
-
-                bloomReadSaves = 0;
-                failedLuceneReads = 0;
-                luceneAdds = 0;
-                successfulLuceneReads = 0;
-                startTime = System.currentTimeMillis();
-            }
-
-            int bloomKey = Math.abs(uId.hashCode() % bloomFilterSize);
-            bloomFilter.fastSet(bloomKey);
-            Document doc = createDocument(uId, id);
-            batchBuffer.put(uId, doc);
-            writer.addDocument(doc);
-            luceneAdds++;
-        } catch (Exception e) {
-            throw new RuntimeException("Error adding key to index", e);
-        }
-    }
-
     public void close() {
         try {
-            if (reader != null)
-                reader.close();
-
+            nrtManager.close();
             writer.close();
             dir.close();
         } catch (Exception e) {
@@ -231,7 +208,7 @@ public class RawLucene {
         }
     }
 
-    protected Document createDocument(String uId, long id) {
+    public Document createDocument(String uId, long id) {
         Document doc = new Document();
         Field uIdField = new Field(UID, uId, Field.Store.NO, Field.Index.NOT_ANALYZED_NO_NORMS);
         uIdField.setIndexOptions(IndexOptions.DOCS_ONLY);
@@ -240,55 +217,77 @@ public class RawLucene {
         return doc;
     }
 
-    IndexReader getReader() {
-        if (reader == null) {
-            try {
-                reader = IndexReader.open(writer, true);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }
-        return reader;
+    public Fieldable newDateField(String name, long value) {
+        return new Field(name, DateTools.timeToString(value, DateTools.Resolution.MINUTE),
+                Field.Store.YES, Field.Index.NOT_ANALYZED);
+    }
+
+    public Fieldable newIdField(String name, String value) {
+        return new Field(RawLucene.ID, value, Field.Store.YES, Field.Index.NOT_ANALYZED_NO_NORMS);
     }
 
     void clear() {
         throw new UnsupportedOperationException("Not yet implemented");
     }
 
-    long count(String fieldName, String value) {
-        IndexSearcher searcher = new IndexSearcher(getReader());
-        CountCollector cc = new CountCollector();
-        try {
-            Query q = new QueryParser(RawLucene.VERSION, fieldName, RawLucene.WHITESPACE_ANALYZER).parse(value);
-            searcher.search(q, cc);
-        } catch (Exception ex) {
-            throw new RuntimeException(ex);
-        }
-        return cc.getCount();
+    long count(final String fieldName, final String value) {
+        return searchSomething(new SearchExecutor<Long>() {
+
+            @Override public Long execute(IndexSearcher searcher) throws Exception {
+                CountCollector cc = new CountCollector();
+                Query q = new QueryParser(RawLucene.VERSION, fieldName, RawLucene.WHITESPACE_ANALYZER).parse(value);
+                searcher.search(q, cc);
+                return cc.getCount();
+            }
+        });
     }
 
-    @SuppressWarnings("serial")
-    static class LRUCache<K, V> extends LinkedHashMap<K, V> {
+    int removeById(final long id) {
+        return searchSomething(new SearchExecutor<Integer>() {
 
-        private int maxSize;
-
-        public LRUCache(int maxSize) {
-            super(maxSize * 4 / 3 + 1, 0.75f, true);
-            this.maxSize = maxSize;
-        }
-
-        @Override
-        protected boolean removeEldestEntry(java.util.Map.Entry<K, V> eldest) {
-            return size() > maxSize;
-        }
+            @Override public Integer execute(IndexSearcher searcher) throws Exception {
+                IndexReader reader = searcher.getIndexReader();
+                Term searchTerm = idTerm.createTerm(Long.toString(id));
+                return reader.deleteDocuments(searchTerm);
+            }
+        });
     }
 
-    public boolean isUseCompoundFile() {
-        return useCompoundFile;
+    public long put(String uId, long id, Document newDoc, boolean delete) throws Exception {
+        if (delete)
+            nrtManager.deleteDocuments(idTerm.createTerm(Long.toString(id)));
+
+        batchBuffer.put(uId, newDoc);
+        luceneAdds++;
+        long currentSearchGeneration = nrtManager.getCurrentSearchingGen(true);
+        if (batchBuffer.size() > maxNumRecordsBeforeIndexing) {
+            for (Document doc : batchBuffer.values()) {
+                batchBuffer.put(doc.get(UID), doc);
+            }
+
+            currentSearchGeneration = nrtManager.addDocuments(batchBuffer.values());
+            luceneAdds += batchBuffer.values().size();
+
+            //TODO UPDATE docs!! 
+            // nrtManager.deleteDocuments(terms);
+
+            batchBuffer.clear();
+            nrtManager.maybeReopen(true);
+            if (logger.isInfoEnabled()) {
+                long diff = System.currentTimeMillis() - startTime;
+                logger.info(diff + "," + failedLuceneReads + "," + successfulLuceneReads + "," + luceneAdds);
+            }
+
+            failedLuceneReads = 0;
+            luceneAdds = 0;
+            successfulLuceneReads = 0;
+            startTime = System.currentTimeMillis();
+        }
+        return currentSearchGeneration;
     }
 
-    public void setUseCompoundFile(boolean useCompoundFile) {
-        this.useCompoundFile = useCompoundFile;
+    public long put(String uId, long id) throws Exception {
+        return put(uId, id, new Document(), false);
     }
 
     public double getRamBufferSizeMB() {
@@ -323,24 +322,12 @@ public class RawLucene {
         this.maxNumRecordsBeforeIndexing = maxNumRecordsBeforeCommit;
     }
 
-    public void setLruCacheSize(int lruCacheSize) {
-        this.lruCacheSize = lruCacheSize;
-    }
-
-    public int getLruCacheSize() {
-        return lruCacheSize;
-    }
-
     public void setMaxMergeMB(int maxMergeMB) {
         this.maxMergeMB = maxMergeMB;
     }
 
     public int getMaxMergeMB() {
         return maxMergeMB;
-    }
-
-    public long getBloomReadSaves() {
-        return bloomReadSaves;
     }
 
     public long getLuceneAdds() {
@@ -361,5 +348,30 @@ public class RawLucene {
 
     public static Fieldable newStored(String name, String value) {
         return new Field(name, value, Field.Store.YES, Field.Index.NOT_ANALYZED_NO_NORMS);
-    }    
+    }
+
+    void refresh() {
+        try {
+            writer.commit();
+        } catch (Exception ex) {
+            throw new RuntimeException();
+        }
+    }
+
+    /**
+     * You'll need to call releaseUnmanagedSearcher afterwards
+     */
+    IndexSearcher newUnmanagedSearcher() {
+        SearcherManager sm = nrtManager.getSearcherManager(true);
+        return sm.acquire();
+    }
+
+    void releaseUnmanagedSearcher(IndexSearcher searcher) {
+        // TODO: is it ok to avoid calling the searchmanager?
+        try {
+            searcher.getIndexReader().decRef();
+        } catch (IOException ex) {
+            throw new RuntimeException(ex);
+        }
+    }
 }

@@ -11,13 +11,12 @@ import org.apache.lucene.document.Document;
  */
 public class LuceneEdge extends LuceneElement implements Edge {
 
-    public LuceneEdge(final Document doc, final LuceneGraph graph) {
-        this(doc, graph, false);
+    public LuceneEdge(LuceneGraph graph, Document doc) {
+        this(graph, doc, false);
     }
 
-    protected LuceneEdge(final Document doc, final LuceneGraph graph, boolean isNew) {
-        super(graph);
-        this.rawElement = doc;
+    protected LuceneEdge(final LuceneGraph graph, final Document doc, boolean isNew) {
+        super(graph, doc);
         if (isNew) {
             for (final LuceneAutomaticIndex autoIndex : this.graph.getAutoIndices(LuceneEdge.class)) {
                 autoIndex.autoUpdate(AutomaticIndex.LABEL, this.getLabel(), null, this);
@@ -38,16 +37,10 @@ public class LuceneEdge extends LuceneElement implements Edge {
     }
 
     @Override public boolean equals(final Object object) {
-        return object instanceof LuceneEdge && ((LuceneEdge) object).getId().equals(this.getId());
+        return object instanceof LuceneEdge && super.equals(object);
     }
 
     @Override public String toString() {
         return StringFactory.edgeString(this);
-    }
-
-    @Override
-    public int hashCode() {
-        int hash = 7;
-        return hash;
     }
 }

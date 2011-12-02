@@ -15,41 +15,32 @@
  */
 package com.pannous.tmpo;
 
-import java.io.IOException;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.search.Collector;
-import org.apache.lucene.search.Scorer;
+import com.tinkerpop.blueprints.pgm.Vertex;
+import org.junit.Test;
+import static org.junit.Assert.*;
 
 /**
  *
  * @author Peter Karich, info@jetsli.de
  */
-class CountCollector extends Collector {
+public class EdgeSequenceTest extends SimpleLuceneTestBase {
 
-    long count = 0;
-
-    public CountCollector() {        
+    @Test
+    public void testRemove() {
     }
 
-    public long getCount() {
-        return count;
-    }
+    @Test
+    public void testIterator() {
+        Vertex v1 = g.addVertex("peter");
+        Vertex v2 = g.addVertex("timetabling");
+        g.addEdge(null, v1, v2, "twitteraccount");
 
-    @Override
-    public void setScorer(Scorer scorer) throws IOException {
-    }
+        EdgeSequence eSeq = new EdgeSequence(g, v1, RawLucene.EDGE_IN);
+        assertFalse(eSeq.hasNext());
 
-    @Override
-    public void collect(int doc) throws IOException {
-        count++;
-    }
-
-    @Override
-    public void setNextReader(IndexReader reader, int docBase) throws IOException {
-    }
-
-    @Override
-    public boolean acceptsDocsOutOfOrder() {
-        return true;
+        eSeq = new EdgeSequence(g, v1, RawLucene.EDGE_IN, RawLucene.EDGE_OUT);
+        assertTrue(eSeq.hasNext());
+        assertEquals("twitteraccount", eSeq.next().getLabel());
+        assertFalse(eSeq.hasNext());
     }
 }

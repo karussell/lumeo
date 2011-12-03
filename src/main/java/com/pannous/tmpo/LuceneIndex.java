@@ -45,9 +45,9 @@ public class LuceneIndex<T extends Element> implements Index<T> {
 
     @Override public CloseableSequence<T> get(final String key, final Object value) {
         if (Vertex.class.isAssignableFrom(indexClass)) {
-            return (CloseableSequence<T>) new VertexFilterSequence(graph);
+            return (CloseableSequence<T>) new VertexFilterSequence(graph).setValue(key, value);
         } else if (Edge.class.isAssignableFrom(indexClass)) {
-            return (CloseableSequence<T>) new EdgeFilterSequence(graph);
+            return (CloseableSequence<T>) new EdgeFilterSequence(graph).setValue(key, value);
         } else
             throw new RuntimeException(UNSUPP_TYPE + ":" + indexClass.getSimpleName());
     }

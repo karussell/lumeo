@@ -3,11 +3,9 @@ package com.pannous.tmpo;
 import com.tinkerpop.blueprints.pgm.AutomaticIndex;
 
 import com.tinkerpop.blueprints.pgm.Element;
-import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.document.Field;
 
 /**
- * @author Marko A. Rodriguez (http://markorodriguez.com)
+ * @author Peter Karich, info@jetsli.de
  */
 public class LuceneAutomaticIndex<T extends Element> extends LuceneIndex<T> implements AutomaticIndex<T> {
 

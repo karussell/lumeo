@@ -6,25 +6,29 @@ import com.tinkerpop.blueprints.pgm.Element;
 import com.tinkerpop.blueprints.pgm.Index;
 import com.tinkerpop.blueprints.pgm.Vertex;
 import com.tinkerpop.blueprints.pgm.impls.StringFactory;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.document.Field;
 
 /**
  * @author Peter Karich, info@jetsli.de
  */
 public class LuceneIndex<T extends Element> implements Index<T> {
 
-    private static RuntimeException UNSUPP_TYPE = new UnsupportedOperationException("indexClass must be from type Edge or Vertex (or a sublcass)");
+    private static String UNSUPP_TYPE = "indexClass must be from type Edge or Vertex (or a sublcass)";
+    private Map<String, Analyzer> mapping = new LinkedHashMap<String, Analyzer>();
     private final Class<T> indexClass;
     protected final LuceneGraph graph;
-    private final String indexName;
 
     /** at the moment we have only automatic indices */
-    protected LuceneIndex(final String indexName, final Class<T> indexClass, final LuceneGraph graph) {
+    protected LuceneIndex(LuceneGraph graph, Class<T> indexClass) {
         this.indexClass = indexClass;
         this.graph = graph;
-        this.indexName = indexName;
 
         if (!Vertex.class.isAssignableFrom(indexClass) && !Edge.class.isAssignableFrom(indexClass))
-            throw UNSUPP_TYPE;
+            throw new RuntimeException(UNSUPP_TYPE + ":" + indexClass.getSimpleName());
     }
 
     @Override public Type getIndexType() {
@@ -36,36 +40,39 @@ public class LuceneIndex<T extends Element> implements Index<T> {
     }
 
     @Override public String getIndexName() {
-        return this.indexName;
-    }
-
-    @Override public void put(final String key, final Object value, final T element) {
-        element.setProperty(key, value);        
+        return getIndexClass().getSimpleName();
     }
 
     @Override public CloseableSequence<T> get(final String key, final Object value) {
         if (Vertex.class.isAssignableFrom(indexClass)) {
             return (CloseableSequence<T>) new VertexFilterSequence(graph);
         } else if (Edge.class.isAssignableFrom(indexClass)) {
-            return (CloseableSequence<T>) new EdgeVertexTraversalSequence(graph);
+            return (CloseableSequence<T>) new EdgeFilterSequence(graph);
         } else
-            throw UNSUPP_TYPE;
+            throw new RuntimeException(UNSUPP_TYPE + ":" + indexClass.getSimpleName());
     }
 
     @Override public long count(final String key, final Object value) {
-        throw new UnsupportedOperationException();
+        return graph.count(key, value);
     }
 
     @Override public void remove(final String key, final Object value, final T element) {
+        element.removeProperty(key);
     }
 
-    protected void removeBasic(final String key, final Object value, final T element) {
+    @Override public void put(final String key, final Object value, final T element) {
+        element.setProperty(key, value);
     }
 
-    protected void putBasic(final String key, final Object value, final T element) {
+    protected void putField(String key, Field field, T element) {
+        ((LuceneElement) element).getRaw().add(field);
     }
 
     @Override public String toString() {
         return StringFactory.indexString(this);
+    }
+
+    public Set<String> getAutoIndexKeys() {
+        return mapping.keySet();
     }
 }

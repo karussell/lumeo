@@ -15,12 +15,11 @@
  */
 package com.pannous.tmpo;
 
+import com.pannous.tmpo.util.TermFilter;
 import com.tinkerpop.blueprints.pgm.Edge;
 import java.util.Iterator;
 import com.tinkerpop.blueprints.pgm.Vertex;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.search.QueryWrapperFilter;
-import org.apache.lucene.search.TermQuery;
 import org.junit.Before;
 import org.junit.Test;
 import static org.junit.Assert.*;
@@ -29,19 +28,15 @@ import static org.junit.Assert.*;
  *
  * @author Peter Karich, info@jetsli.de
  */
-public class EdgeVertexTraversalSequenceTest {
-
-    private LuceneGraph g;
-
-    @Before public void setUp() {
-        g = new LuceneGraph();
-    }
+public class EdgeFilterSequenceTest extends SimpleLuceneTestBase {
 
     @Test public void testIterator() {
         Vertex x1 = g.addVertex("test");
         Vertex x2 = g.addVertex("test2");
         Edge e = g.addEdge(null, x1, x2, "association");
-        EdgeVertexTraversalSequence seq = new EdgeVertexTraversalSequence(g);
+        flushAndRefresh();
+        
+        EdgeFilterSequence seq = new EdgeFilterSequence(g);
         Iterator<Edge> iter = seq.iterator();
         assertTrue(iter.hasNext());
         assertEquals(e, iter.next());
@@ -49,16 +44,18 @@ public class EdgeVertexTraversalSequenceTest {
     }
 
     @Test public void testIteratorWithVertexFilter() {
-        Vertex x1 = g.addVertex("final");
-        x1.setProperty("hello", "world");
+        Vertex x1 = g.addVertex("final");        
         Vertex x2 = g.addVertex("countdown");
-        final Edge e = g.addEdge(null, x1, x2, "association");
-        x1 = g.addVertex("test");
-        x1.setProperty("hello", "test");
-        x2 = g.addVertex("test2");
-        g.addEdge(null, x1, x2, "association2");
-        EdgeVertexTraversalSequence seq = new EdgeVertexTraversalSequence(g).
-                setFilter(new QueryWrapperFilter(new TermQuery(new Term("hello", "world"))));
+        Edge e = g.addEdge(null, x1, x2, "association");
+        e.setProperty("hello", "test");
+        
+        Vertex x3 = g.addVertex("test");
+        x3.setProperty("hello", "test");        
+        e = g.addEdge(null, x1, x3, "association2");
+        e.setProperty("hello", "world");
+        flushAndRefresh();
+        
+        LuceneFilterSequence<Edge> seq = new EdgeFilterSequence(g).setFilter(new TermFilter(new Term("hello", "world")));
         Iterator<Edge> iter = seq.iterator();
         assertTrue(iter.hasNext());
         assertEquals(e, iter.next());
@@ -67,7 +64,7 @@ public class EdgeVertexTraversalSequenceTest {
 
     @Test
     public void testClose() {
-        EdgeVertexTraversalSequence seq = new EdgeVertexTraversalSequence(g);
+        EdgeFilterSequence seq = new EdgeFilterSequence(g);
         seq.close();
     }
 }

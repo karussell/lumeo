@@ -15,25 +15,21 @@
  */
 package com.pannous.tmpo;
 
-import java.io.Reader;
-import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.TokenStream;
+import com.tinkerpop.blueprints.pgm.Edge;
+import org.apache.lucene.document.Document;
 
 /**
- *
+ * Class traverses all edges (or a subset if filter is specified)
+ * 
  * @author Peter Karich, info@jetsli.de
  */
-public class SelectiveAnalyzer extends Analyzer {
+public class EdgeFilterSequence extends LuceneFilterSequence<Edge> {
 
-    @Override
-    public TokenStream tokenStream(String field, final Reader reader) {
-        if (field.endsWith("_s"))
-            return RawLucene.KEYWORD_ANALYZER.tokenStream(field, reader);
-        else if (field.endsWith("_ws"))
-            return RawLucene.WHITESPACE_ANALYZER.tokenStream(field, reader);
-        else if (field.endsWith("_t"))
-            return RawLucene.STANDARD_ANALYZER.tokenStream(field, reader);
-        else
-            return RawLucene.KEYWORD_ANALYZER.tokenStream(field, reader);
+    public EdgeFilterSequence(LuceneGraph rl) {
+        super(rl, Edge.class);
+    }
+
+    @Override protected Edge createElement(Document doc) {
+        return new LuceneEdge(g, doc);
     }
 }

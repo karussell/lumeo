@@ -56,17 +56,25 @@ public class LuceneGraphTest extends SimpleLuceneTestBase {
         AutomaticIndex<Vertex> index = g.createAutomaticIndex("keyword", Vertex.class, set);
         v.setProperty("fullname", "peter something");
         flushAndRefresh();
-        index.get("fullname", "peter something");
+        CloseableSequence<Vertex> seq = index.get("fullname", "peter something");
+        assertTrue(seq.hasNext());
+        seq.next();
+        assertFalse(seq.hasNext());
+        
+        seq = index.get("fullname", "peter");
+        assertFalse(seq.hasNext());
 
         // Now do some lucene magic ...
-        set.clear();
-        // avoid confusion with fullname
-        set.add("fullnameText");
+        set.clear();        
+        set.add("fullname_t");
         index = g.createAutomaticIndex("standard", Vertex.class, set);
-        v.setProperty("fullnameText", "peter something");
+        v.setProperty("fullname_t", "peter something");
         flushAndRefresh();
         // ... and search via StandardAnalyzer!        
-        index.get("fullnameText", "peter");
+        seq = index.get("fullname_t", "peter");
+        assertTrue(seq.hasNext());
+        seq.next();
+        assertFalse(seq.hasNext());
     }
 
     @Test public void testAddVertex() {

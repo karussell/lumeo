@@ -3,21 +3,16 @@ package com.pannous.tmpo;
 import com.tinkerpop.blueprints.pgm.AutomaticIndex;
 
 import com.tinkerpop.blueprints.pgm.Element;
-import java.util.HashSet;
-import java.util.Set;
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.document.Field;
 
 /**
  * @author Marko A. Rodriguez (http://markorodriguez.com)
  */
 public class LuceneAutomaticIndex<T extends Element> extends LuceneIndex<T> implements AutomaticIndex<T> {
 
-    Set<String> autoIndexKeys;
-
-    public LuceneAutomaticIndex(final String name, final Class<T> indexClass, final LuceneGraph graph, final Set<String> keys) {
-        super(name, indexClass, graph);
-        this.autoIndexKeys = new HashSet<String>();
-        if(keys != null)
-            this.autoIndexKeys.addAll(keys);
+    public LuceneAutomaticIndex(final LuceneGraph graph, final Class<T> indexClass) {
+        super(graph, indexClass);
     }
 
     @Override public Type getIndexType() {
@@ -25,20 +20,13 @@ public class LuceneAutomaticIndex<T extends Element> extends LuceneIndex<T> impl
     }
 
     protected void autoUpdate(final String key, final Object newValue, final Object oldValue, final T element) {
-        if (null == this.autoIndexKeys || this.autoIndexKeys.contains(key)) {
-            if (oldValue != null)
-                this.removeBasic(key, oldValue, element);
-            this.putBasic(key, newValue, element);
-        }
+        if (oldValue != null)
+            this.remove(key, oldValue, element);
+
+        put(key, oldValue, element);
     }
 
     protected void autoRemove(final String key, final Object oldValue, final T element) {
-        if (null == this.autoIndexKeys || this.autoIndexKeys.contains(key)) {
-            this.removeBasic(key, oldValue, element);
-        }
-    }
-
-    @Override public Set<String> getAutoIndexKeys() {
-        return this.autoIndexKeys;
+        remove(key, oldValue, element);        
     }
 }

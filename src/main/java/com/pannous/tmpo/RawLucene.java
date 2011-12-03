@@ -16,18 +16,16 @@ package com.pannous.tmpo;
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import com.pannous.tmpo.util.CountCollector;
+import com.pannous.tmpo.util.SelectiveAnalyzer;
 import com.pannous.tmpo.util.SearchExecutor;
 import java.io.File;
 import java.io.IOException;
 
 
+import java.util.Date;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.KeywordAnalyzer;
-import org.apache.lucene.analysis.WhitespaceAnalyzer;
-import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.DateTools;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
@@ -40,10 +38,8 @@ import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.LogByteSizeMergePolicy;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.TermDocs;
-import org.apache.lucene.queryParser.QueryParser;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.NRTManager;
-import org.apache.lucene.search.Query;
 import org.apache.lucene.search.SearcherManager;
 import org.apache.lucene.search.SearcherWarmer;
 import org.apache.lucene.store.Directory;
@@ -96,9 +92,7 @@ public class RawLucene {
     private int termIndexIntervalSize = 512;
     private Logger logger = LoggerFactory.getLogger(getClass());
     public static final Version VERSION = Version.LUCENE_35;
-    public static final Analyzer WHITESPACE_ANALYZER = new WhitespaceAnalyzer(VERSION);
-    public static final Analyzer STANDARD_ANALYZER = new StandardAnalyzer(VERSION);
-    public static final Analyzer KEYWORD_ANALYZER = new KeywordAnalyzer();
+    private Analyzer analyzer = new SelectiveAnalyzer();
     private String name;
 
     public RawLucene(String path) {
@@ -115,9 +109,18 @@ public class RawLucene {
         name = "mem " + dir.toString();
     }
 
+    public RawLucene setAnalyzer(Analyzer analyzer) {
+        this.analyzer = analyzer;
+        return this;
+    }
+
+    public Analyzer getAnalyzer() {
+        return analyzer;
+    }
+
     public RawLucene init() {
         try {
-            IndexWriterConfig cfg = new IndexWriterConfig(VERSION, KEYWORD_ANALYZER);
+            IndexWriterConfig cfg = new IndexWriterConfig(VERSION, analyzer);
             LogByteSizeMergePolicy mp = new LogByteSizeMergePolicy();
             mp.setMaxMergeMB(getMaxMergeMB());
             //mp.setUseCompoundFile(useCompoundFile);
@@ -189,7 +192,7 @@ public class RawLucene {
         IndexSearcher searcher = sm.acquire();
         try {
             return (T) exec.execute(searcher);
-        } catch (Exception e) {            
+        } catch (Exception e) {
             throw new RuntimeException(e);
         } finally {
             try {
@@ -200,7 +203,11 @@ public class RawLucene {
         }
     }
 
-    public boolean exists(String uId) {
+    public boolean exists(long id) {
+        return findById(id) != null;
+    }
+
+    public boolean existsUserId(String uId) {
         return findByUserId(uId) != null;
     }
 
@@ -238,26 +245,52 @@ public class RawLucene {
         return idField;
     }
 
+    public static Fieldable newStringField(String name, String val) {
+        Field field = new Field(name, val, Field.Store.YES, Field.Index.NOT_ANALYZED_NO_NORMS);
+        field.setIndexOptions(IndexOptions.DOCS_ONLY);
+        return field;
+    }
+
     void clear() {
         throw new UnsupportedOperationException("Not yet implemented");
     }
 
-    long count(final String fieldName, final String value) {
+    long count(final String fieldName, final Object value) {
         return searchSomething(new SearchExecutor<Long>() {
 
             @Override public Long execute(IndexSearcher searcher) throws Exception {
-                CountCollector cc = new CountCollector();
-                Query q = new QueryParser(RawLucene.VERSION, fieldName, RawLucene.WHITESPACE_ANALYZER).parse(value);
-                searcher.search(q, cc);
-                return cc.getCount();
+                Term searchTerm = new Term(fieldName).createTerm(toTermString(value));
+                TermDocs td = searcher.getIndexReader().termDocs(searchTerm);
+                try {
+                    long c = 0;
+                    while (td.next()) {
+                        c++;
+                    }
+                    return c;
+                } finally {
+                    td.close();
+                }
             }
         });
+    }
+
+    String toTermString(Object o) {
+        if (o instanceof String)
+            return (String) o;
+        else if (o instanceof Long)
+            return NumericUtils.longToPrefixCoded((Long) o);
+        else if (o instanceof Double)
+            return NumericUtils.doubleToPrefixCoded((Double) o);
+        else if (o instanceof Date)
+            return DateTools.timeToString(((Date) o).getTime(), DateTools.Resolution.MINUTE);
+        else
+            throw new UnsupportedOperationException("couldn't transform into string " + o);
     }
 
     long removeById(final long id) {
         try {
             return nrtManager.deleteDocuments(idTerm.createTerm(NumericUtils.longToPrefixCoded(id)));
-        } catch (IOException ex) {            
+        } catch (IOException ex) {
             throw new RuntimeException(ex);
         }
     }
@@ -271,15 +304,12 @@ public class RawLucene {
                 currentSearchGeneration = flush();
 
             return currentSearchGeneration;
-        } catch (Exception ex) {            
+        } catch (Exception ex) {
             throw new RuntimeException(ex);
         }
     }
 
-    public long put(String uId, long id, Document newDoc, boolean delete) {
-        if (delete)
-            removeById(id);        
-
+    public long put(String uId, long id, Document newDoc) {
         if (newDoc.get(ID) == null)
             newDoc.add(newIdField(ID, id));
 
@@ -287,6 +317,14 @@ public class RawLucene {
             newDoc.add(newUIdField(UID, uId));
 
         return fastPut(id, newDoc);
+    }
+
+     <T extends LuceneElement> void update(Document doc) {
+        long id = ((NumericField) doc.getFieldable(ID)).getNumericValue().longValue();
+        // TODO PERFORMANCE should we really check?
+        if (exists(id))
+            removeById(id);
+        fastPut(id, doc);
     }
 
     public double getRamBufferSizeMB() {
@@ -389,7 +427,7 @@ public class RawLucene {
         return name;
     }
 
-    Document initRelation(Document edgeDoc, Document vOut, Document vIn) {
+    void initRelation(Document edgeDoc, Document vOut, Document vIn) {
         long oIndex = ((NumericField) vOut.getFieldable(ID)).getNumericValue().longValue();
         edgeDoc.add(newIdField(VERTEX_OUT, oIndex));
         long iIndex = ((NumericField) vIn.getFieldable(ID)).getNumericValue().longValue();
@@ -399,9 +437,16 @@ public class RawLucene {
         vOut.add(newIdField(EDGE_OUT, eId));
         vIn.add(newIdField(EDGE_IN, eId));
 
-        // TODO some more here
-        batchBuffer.put(oIndex, vOut);
-        batchBuffer.put(iIndex, vIn);
-        return edgeDoc;
+        fastPut(oIndex, vOut);
+        fastPut(iIndex, vIn);
+    }
+
+    static String getVertexFieldForEdgeType(String edgeType) {
+        if (EDGE_IN.equals(edgeType))
+            return VERTEX_IN;
+        else if (EDGE_OUT.equals(edgeType))
+            return VERTEX_OUT;
+        else
+            throw new UnsupportedOperationException("Edge type not supported:" + edgeType);
     }
 }

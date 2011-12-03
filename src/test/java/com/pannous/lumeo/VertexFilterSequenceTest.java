@@ -1,5 +1,5 @@
 /*
- *  Copyright 2011 Peter Karich info@jetsli.de
+ *  Copyright 2011 Peter Karich jetwick_@_pannous_._info
  * 
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -13,23 +13,25 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-package com.pannous.tmpo;
+package com.pannous.lumeo;
 
-import com.tinkerpop.blueprints.pgm.Vertex;
-import org.apache.lucene.document.Document;
+import org.junit.Test;
+import static org.junit.Assert.*;
 
 /**
- * This Class iterates through all vertices or only a subset if a filter is specified.
- * 
+ *
  * @author Peter Karich, info@jetsli.de
  */
-public class VertexFilterSequence extends LuceneFilterSequence<Vertex> {
-
-    public VertexFilterSequence(LuceneGraph rl) {
-        super(rl, Vertex.class);
+public class VertexFilterSequenceTest {
+    
+    @Test public void testSetFilter() {
     }
 
-    @Override protected Vertex createElement(Document doc) {
-        return new LuceneVertex(g, doc);
+    @Test public void testHasNext() {
+        assertEquals(1, 1);
+    }
+    
+    @Test public void testSearchAfter() {
+        // important to test!
     }
 }

@@ -1,4 +1,4 @@
-package com.pannous.tmpo;
+package com.pannous.lumeo;
 
 import com.tinkerpop.blueprints.pgm.CloseableSequence;
 import com.tinkerpop.blueprints.pgm.Edge;

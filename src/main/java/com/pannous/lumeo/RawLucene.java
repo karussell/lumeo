@@ -1,4 +1,4 @@
-package com.pannous.tmpo;
+package com.pannous.lumeo;
 
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -16,12 +16,10 @@ package com.pannous.tmpo;
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import com.pannous.tmpo.util.SelectiveAnalyzer;
-import com.pannous.tmpo.util.SearchExecutor;
+import com.pannous.lumeo.util.SelectiveAnalyzer;
+import com.pannous.lumeo.util.SearchExecutor;
 import java.io.File;
 import java.io.IOException;
-
-
 import java.util.Date;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;

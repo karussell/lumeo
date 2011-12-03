@@ -1,5 +1,5 @@
 /*
- *  Copyright 2011 Peter Karich jetwick_@_pannous_._info
+ *  Copyright 2011 Peter Karich info@jetsli.de
  * 
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -13,13 +13,23 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-package com.pannous.tmpo.util;
+package com.pannous.lumeo;
 
-import org.apache.lucene.search.IndexSearcher;
+import com.tinkerpop.blueprints.pgm.Edge;
+import org.apache.lucene.document.Document;
 
 /**
- *
+ * Class traverses all edges (or a subset if filter is specified)
+ * 
  * @author Peter Karich, info@jetsli.de
  */
-public interface SearchExecutor<T> extends AnyExecutor<T, IndexSearcher> {    
+public class EdgeFilterSequence extends LuceneFilterSequence<Edge> {
+
+    public EdgeFilterSequence(LuceneGraph rl) {
+        super(rl, Edge.class);
+    }
+
+    @Override protected Edge createElement(Document doc) {
+        return new LuceneEdge(g, doc);
+    }
 }

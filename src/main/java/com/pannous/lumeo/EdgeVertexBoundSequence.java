@@ -13,11 +13,9 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-package com.pannous.tmpo;
+package com.pannous.lumeo;
 
-import com.pannous.tmpo.util.TermFilter;
-import com.tinkerpop.blueprints.pgm.Vertex;
-import org.apache.lucene.document.Document;
+import com.pannous.lumeo.util.TermFilter;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.BooleanFilter;

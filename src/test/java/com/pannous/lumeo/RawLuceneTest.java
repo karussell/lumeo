@@ -13,12 +13,10 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-package com.pannous.tmpo;
+package com.pannous.lumeo;
 
-import com.pannous.tmpo.util.SearchExecutor;
+import com.pannous.lumeo.util.SearchExecutor;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermDocs;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.TopDocs;

@@ -13,9 +13,9 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-package com.pannous.tmpo.util;
+package com.pannous.lumeo.util;
 
-import com.pannous.tmpo.RawLucene;
+import com.pannous.lumeo.RawLucene;
 import java.io.Reader;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.KeywordAnalyzer;

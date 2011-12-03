@@ -13,9 +13,9 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-package com.pannous.tmpo;
+package com.pannous.lumeo;
 
-import com.pannous.tmpo.util.TermFilter;
+import com.pannous.lumeo.util.TermFilter;
 import com.tinkerpop.blueprints.pgm.CloseableSequence;
 import java.io.IOException;
 import java.util.Iterator;

@@ -13,14 +13,14 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-package com.pannous.tmpo;
+package com.pannous.lumeo;
 
-import com.pannous.tmpo.util.TermFilter;
+import com.pannous.lumeo.EdgeFilterSequence;
+import com.pannous.lumeo.util.TermFilter;
 import com.tinkerpop.blueprints.pgm.Edge;
 import java.util.Iterator;
 import com.tinkerpop.blueprints.pgm.Vertex;
 import org.apache.lucene.index.Term;
-import org.junit.Before;
 import org.junit.Test;
 import static org.junit.Assert.*;
 

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2011 Peter Karich jetwick_@_pannous_._info
+ *  Copyright 2011 Peter Karich info@jetsli.de
  * 
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -13,22 +13,30 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-package com.pannous.tmpo.util;
+package com.pannous.lumeo;
+
+import com.pannous.lumeo.LuceneGraph;
+import org.junit.After;
+import org.junit.Before;
 
 /**
  *
  * @author Peter Karich, info@jetsli.de
  */
-public interface AnyExecutor<A, B> {
+public class SimpleLuceneTestBase {
 
-    public static AnyExecutor<Object, Object> EMPTY_EXECUTOR = new AnyExecutor<Object, Object>() {
+    LuceneGraph g;
 
-        @Override
-        public Object execute(Object o) throws Exception {
-            return o;
-        }
-    };
+    @Before public void setUp() {
+        g = new LuceneGraph();
+    }
 
-    public A execute(B o) throws Exception;
-;
+    @After public void tearDown() {
+        g.shutdown();
+    }
+
+    protected void flushAndRefresh() {
+        g.flush();
+        g.refresh();
+    }
 }

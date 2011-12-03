@@ -13,25 +13,13 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-package com.pannous.tmpo.util;
+package com.pannous.lumeo.util;
 
-import java.util.LinkedHashMap;
+import org.apache.lucene.search.IndexSearcher;
 
 /**
  *
  * @author Peter Karich, info@jetsli.de
  */
-@SuppressWarnings(value = "serial")
-class LRUCache<K, V> extends LinkedHashMap<K, V> {
-    private int maxSize;
-
-    public LRUCache(int maxSize) {
-        this.maxSize = maxSize;
-    }
-
-    @Override
-    protected boolean removeEldestEntry(java.util.Map.Entry<K, V> eldest) {
-        return size() > maxSize;
-    }
-    
+public interface SearchExecutor<T> extends AnyExecutor<T, IndexSearcher> {    
 }

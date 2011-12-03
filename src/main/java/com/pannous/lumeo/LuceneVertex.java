@@ -1,4 +1,4 @@
-package com.pannous.tmpo;
+package com.pannous.lumeo;
 
 import com.tinkerpop.blueprints.pgm.Edge;
 import com.tinkerpop.blueprints.pgm.Vertex;

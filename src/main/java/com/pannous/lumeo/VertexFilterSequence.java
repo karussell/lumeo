@@ -13,29 +13,23 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-package com.pannous.tmpo;
+package com.pannous.lumeo;
 
-import org.junit.After;
-import org.junit.Before;
+import com.tinkerpop.blueprints.pgm.Vertex;
+import org.apache.lucene.document.Document;
 
 /**
- *
+ * This Class iterates through all vertices or only a subset if a filter is specified.
+ * 
  * @author Peter Karich, info@jetsli.de
  */
-public class SimpleLuceneTestBase {
+public class VertexFilterSequence extends LuceneFilterSequence<Vertex> {
 
-    LuceneGraph g;
-
-    @Before public void setUp() {
-        g = new LuceneGraph();
+    public VertexFilterSequence(LuceneGraph rl) {
+        super(rl, Vertex.class);
     }
 
-    @After public void tearDown() {
-        g.shutdown();
-    }
-
-    protected void flushAndRefresh() {
-        g.flush();
-        g.refresh();
+    @Override protected Vertex createElement(Document doc) {
+        return new LuceneVertex(g, doc);
     }
 }

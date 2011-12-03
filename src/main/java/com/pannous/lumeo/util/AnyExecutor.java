@@ -1,5 +1,5 @@
 /*
- *  Copyright 2011 Peter Karich info@jetsli.de
+ *  Copyright 2011 Peter Karich jetwick_@_pannous_._info
  * 
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -13,23 +13,22 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-package com.pannous.tmpo;
-
-import com.tinkerpop.blueprints.pgm.Edge;
-import org.apache.lucene.document.Document;
+package com.pannous.lumeo.util;
 
 /**
- * Class traverses all edges (or a subset if filter is specified)
- * 
+ *
  * @author Peter Karich, info@jetsli.de
  */
-public class EdgeFilterSequence extends LuceneFilterSequence<Edge> {
+public interface AnyExecutor<A, B> {
 
-    public EdgeFilterSequence(LuceneGraph rl) {
-        super(rl, Edge.class);
-    }
+    public static AnyExecutor<Object, Object> EMPTY_EXECUTOR = new AnyExecutor<Object, Object>() {
 
-    @Override protected Edge createElement(Document doc) {
-        return new LuceneEdge(g, doc);
-    }
+        @Override
+        public Object execute(Object o) throws Exception {
+            return o;
+        }
+    };
+
+    public A execute(B o) throws Exception;
+;
 }

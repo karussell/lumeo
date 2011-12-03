@@ -1,19 +1,15 @@
-make tests passing
-
+make cool stuff working under LuceneGraphTest (somefield_t and do only store fields which are not in propertyKey)
 check type filtering (e.g. create edge + vertex of same userId!)
 
 make things thread safe. 
    lock access to put - adding an edge is not an atomic access to the map
    delete + put may result in missing or duplicate entries
 
-remove difference of edge and vertex in/out ? 
-    this or something else would be necessary if we introduce shortcut from vertex to vertex
-
-add more tests for all methods
-make tests passing
-
 check if all methods are implemented
 make tests passing
+
+remove difference of edge and vertex in/out ? 
+    this or something else would be necessary if we introduce shortcut from vertex to vertex
 
 faster field fetching via doc values
   http://www.searchworkings.org/blog/-/blogs/introducing-lucene-index-doc-values

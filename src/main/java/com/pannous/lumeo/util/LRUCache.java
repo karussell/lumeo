@@ -13,25 +13,25 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-package com.pannous.tmpo;
+package com.pannous.lumeo.util;
 
-import org.junit.Test;
-import static org.junit.Assert.*;
+import java.util.LinkedHashMap;
 
 /**
  *
  * @author Peter Karich, info@jetsli.de
  */
-public class VertexFilterSequenceTest {
-    
-    @Test public void testSetFilter() {
+@SuppressWarnings(value = "serial")
+class LRUCache<K, V> extends LinkedHashMap<K, V> {
+    private int maxSize;
+
+    public LRUCache(int maxSize) {
+        this.maxSize = maxSize;
     }
 
-    @Test public void testHasNext() {
-        assertEquals(1, 1);
+    @Override
+    protected boolean removeEldestEntry(java.util.Map.Entry<K, V> eldest) {
+        return size() > maxSize;
     }
     
-    @Test public void testSearchAfter() {
-        // important to test!
-    }
 }

@@ -15,6 +15,7 @@
  */
 package com.pannous.lumeo;
 
+import com.pannous.lumeo.util.Helper;
 import com.tinkerpop.blueprints.pgm.Edge;
 import com.tinkerpop.blueprints.pgm.CloseableSequence;
 import com.tinkerpop.blueprints.pgm.Index;
@@ -28,7 +29,7 @@ import static org.junit.Assert.*;
 public class LuceneIndexTest extends SimpleLuceneTestBase {
 
     @Test public void testPutVertex() {
-        Index<Vertex> index = g.createAutomaticIndex("keyword", Vertex.class, null);
+        Index<Vertex> index = g.createAutomaticIndex("keyword", Vertex.class, Helper.set("name"));
         Vertex v = g.addVertex(null);
         index.put("name", "peter", v);
         flushAndRefresh();
@@ -41,7 +42,7 @@ public class LuceneIndexTest extends SimpleLuceneTestBase {
     }
 
     @Test public void testPutEdge() {
-        Index<Edge> index = g.createAutomaticIndex("keyword", Edge.class, null);
+        Index<Edge> index = g.createAutomaticIndex("keyword", Edge.class, Helper.set("name"));
         Vertex v1 = g.addVertex(null);        
         Vertex v2 = g.addVertex(null);        
         Edge e = g.addEdge("tmp", v1, v2, "testing");
@@ -53,8 +54,5 @@ public class LuceneIndexTest extends SimpleLuceneTestBase {
         seq.next();
         assertFalse(seq.hasNext());
         seq.close();
-    }
-    
-    @Test public void testPutEdgeAndVertexButRetrieveOnlyOneType() {        
-    }
+    }    
 }

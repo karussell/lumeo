@@ -15,6 +15,7 @@
  */
 package com.pannous.lumeo;
 
+import com.pannous.lumeo.util.Helper;
 import com.tinkerpop.blueprints.pgm.AutomaticIndex;
 import java.util.Iterator;
 import com.tinkerpop.blueprints.pgm.CloseableSequence;
@@ -30,11 +31,9 @@ import static org.junit.Assert.*;
  */
 public class LuceneGraphTest extends SimpleLuceneTestBase {
 
-    @Test public void testCreateAutomaticIndex() {
-        Set<String> propertySet = new LinkedHashSet<String>();
-        propertySet.add("fieldA");
+    @Test public void testCreateAutomaticIndex() {        
         String indexName = "index1";
-        g.createAutomaticIndex(indexName, Vertex.class, propertySet);
+        g.createAutomaticIndex(indexName, Vertex.class, Helper.set("fieldA"));
         Vertex v = g.addVertex("peter");
         v.setProperty("fieldA", "test");
         v.setProperty("fieldB", "pest");
@@ -47,41 +46,38 @@ public class LuceneGraphTest extends SimpleLuceneTestBase {
         assertTrue(seq.hasNext());
         seq.next();
         assertFalse(seq.hasNext());
-        
-        // TODO ignore fieldB due to propertySet
-//        seq = g.getIndex(indexName, Vertex.class).get("fieldB", "pest");
-//        assertFalse(seq.hasNext());
+
+        try {
+            seq = g.getIndex(indexName, Vertex.class).get("fieldB", "pest");
+            assertTrue("fieldB should be not supported by this index", false);
+        } catch (UnsupportedOperationException ex) {
+        }
     }
 
     @Test public void testAutoUpdateVertex() {
         Vertex v = g.addVertex("peter");
-        assertNotNull(v);
-        Set<String> set = new LinkedHashSet<String>();
-        set.add("fullname");
-        AutomaticIndex<Vertex> index = g.createAutomaticIndex("keyword", Vertex.class, set);
+        assertNotNull(v);        
+        AutomaticIndex<Vertex> index = g.createAutomaticIndex("vertex", Vertex.class, Helper.set("fullname", "fullname2,TEXT"));
         v.setProperty("fullname", "peter something");
         flushAndRefresh();
-        
+
         CloseableSequence<Vertex> seq = index.get("fullname", "peter something");
         assertTrue(seq.hasNext());
         seq.next();
         assertFalse(seq.hasNext());
-        
+
         seq = index.get("fullname", "peter");
         assertFalse(seq.hasNext());
 
-        // Now do some lucene magic ...
-        set.clear();        
-        set.add("fullname_t");
-        index = g.createAutomaticIndex("standard", Vertex.class, set);
-        v.setProperty("fullname_t", "peter something");
+        // Now do some lucene magic ...        
+        v.setProperty("fullname2", "peter something");
         flushAndRefresh();
-        
-        // TODO ... and search via StandardAnalyzer!        
-//        seq = index.get("fullname_t", "peter");
-//        assertTrue(seq.hasNext());
-//        seq.next();
-//        assertFalse(seq.hasNext());
+
+        // ... and search via StandardAnalyzer!
+        seq = index.get("fullname2", "peter");
+        assertTrue(seq.hasNext());
+        seq.next();
+        assertFalse(seq.hasNext());
     }
 
     @Test public void testAddAndRemoveVertex() {
@@ -89,12 +85,12 @@ public class LuceneGraphTest extends SimpleLuceneTestBase {
         assertNotNull(v);
         assertNotNull(g.addVertex(null));
         flushAndRefresh();
-        
+
         Vertex tmp = g.getVertex("peter");
         assertNotNull(tmp);
         assertEquals(v, tmp);
         flushAndRefresh();
-        
+
         g.removeVertex(tmp);
         flushAndRefresh();
         assertNull(g.getVertex("peter"));

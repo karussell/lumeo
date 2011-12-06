@@ -15,6 +15,7 @@
  */
 package com.pannous.lumeo;
 
+import com.pannous.lumeo.util.Mapping;
 import com.pannous.lumeo.util.TermFilter;
 import com.tinkerpop.blueprints.pgm.CloseableSequence;
 import java.io.IOException;
@@ -22,6 +23,8 @@ import java.util.Iterator;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.queryParser.ParseException;
+import org.apache.lucene.queryParser.QueryParser;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.BooleanFilter;
 import org.apache.lucene.search.Filter;
@@ -37,27 +40,49 @@ import org.apache.lucene.search.TopDocs;
  */
 public abstract class LuceneFilterSequence<T> implements CloseableSequence<T> {
 
+    public static LuceneFilterSequence EMPTY_SEQUENCE = new LuceneFilterSequence() {
+
+        @Override public boolean hasNext() {
+            return false;
+        }
+
+        @Override public Object next() {
+            throw new UnsupportedOperationException("Not supported.");
+        }
+
+        @Override public void close() {
+        }
+
+        @Override
+        protected Object createElement(Document doc) {
+            throw new UnsupportedOperationException("Not supported.");
+        }
+    };
     protected LuceneGraph g;
     private Filter baseFilter;
     private Filter filter;
     private int n = 10;
     private int index = 0;
+    private Mapping mapping;
     private TopDocs docs;
     private IndexSearcher searcher;
-    private Query query = new MatchAllDocsQuery();
+    private Query query;
     private boolean closed = false;
-    private Analyzer analyzer;
+
+    private LuceneFilterSequence() {
+    }
 
     public LuceneFilterSequence(LuceneGraph g, Class<T> type) {
         this.g = g;
+        query = new MatchAllDocsQuery();
         baseFilter = new TermFilter(new Term(RawLucene.TYPE).createTerm(type.getSimpleName()));
-        analyzer = g.getAnalyzer();
         searcher = g.getRaw().newUnmanagedSearcher();
+        mapping = g.getMapping(type.getSimpleName());
     }
 
     public Filter getBaseFilter() {
         return baseFilter;
-    }        
+    }
 
     protected abstract T createElement(Document doc);
 
@@ -66,9 +91,16 @@ public abstract class LuceneFilterSequence<T> implements CloseableSequence<T> {
         return this;
     }
 
-    public LuceneFilterSequence<T> setValue(String field, Object o) {
-        // TODO use analyzer !
-        query = new TermQuery(new Term(field).createTerm(o.toString()));
+    public LuceneFilterSequence<T> setValue(String field, Object o) {        
+        Analyzer a = mapping.getAnalyzer(field);
+        if (a == Mapping.KEYWORD_ANALYZER)
+            query = new TermQuery(new Term(field).createTerm(o.toString()));
+        else
+            try {
+                query = new QueryParser(RawLucene.VERSION, field, a).parse(o.toString());
+            } catch (ParseException ex) {
+                throw new RuntimeException(ex);
+            }
         return this;
     }
 

@@ -16,20 +16,17 @@ package com.pannous.lumeo;
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import com.pannous.lumeo.util.SelectiveAnalyzer;
+import com.pannous.lumeo.util.Mapping;
 import com.pannous.lumeo.util.SearchExecutor;
 import java.io.File;
 import java.io.IOException;
 import java.util.Date;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
-import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.document.DateTools;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.Field;
-import org.apache.lucene.document.Fieldable;
 import org.apache.lucene.document.NumericField;
-import org.apache.lucene.index.FieldInfo.IndexOptions;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
@@ -48,14 +45,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Taken from:
- * http://code.google.com/p/graphdb-load-tester/
- * 
- * Uses a buffer to accumulate uncommitted state.
+ * Uses a buffer to accumulate uncommitted state. Should stay independent of Blueprints API.
  * 
  * @author Peter Karich, info@jetsli.de
- * @author Mark
- *
  */
 public class RawLucene {
 
@@ -70,8 +62,9 @@ public class RawLucene {
     public static final String EDGE_LABEL = "_elabel";
     public static final String VERTEX_OUT = "_vout";
     public static final String VERTEX_IN = "_vin";
-    // TODO use trove collection
-    private Map<Long, Document> batchBuffer = new ConcurrentHashMap<Long, Document>();
+    public static final Version VERSION = Version.LUCENE_35;
+    // type -> id, doc
+    private Map<String, Map<Long, Document>> batchBuffer = new ConcurrentHashMap<String, Map<Long, Document>>(2);
     private IndexWriter writer;
     private Directory dir;
     private NRTManager nrtManager;
@@ -89,8 +82,8 @@ public class RawLucene {
     private double ramBufferSizeMB = 300;
     private int termIndexIntervalSize = 512;
     private Logger logger = LoggerFactory.getLogger(getClass());
-    public static final Version VERSION = Version.LUCENE_35;
-    private Analyzer analyzer = new SelectiveAnalyzer();
+    private Map<String, Mapping> mappings = new ConcurrentHashMap<String, Mapping>(2);
+    private Mapping defaultMapping = new Mapping("_default");
     private String name;
 
     public RawLucene(String path) {
@@ -107,29 +100,22 @@ public class RawLucene {
         name = "mem " + dir.toString();
     }
 
-    public RawLucene setAnalyzer(Analyzer analyzer) {
-        this.analyzer = analyzer;
-        return this;
-    }
-
-    public Analyzer getAnalyzer() {
-        return analyzer;
-    }
-
     public RawLucene init() {
         try {
-            IndexWriterConfig cfg = new IndexWriterConfig(VERSION, analyzer);
+            // release locks when started
+            if (IndexWriter.isLocked(dir)) {
+                logger.warn("shard is locked, releasing lock");
+                IndexWriter.unlock(dir);
+            }
+            IndexWriterConfig cfg = new IndexWriterConfig(VERSION, defaultMapping.getAnalyzerWrapper());
             LogByteSizeMergePolicy mp = new LogByteSizeMergePolicy();
             mp.setMaxMergeMB(getMaxMergeMB());
-            //mp.setUseCompoundFile(useCompoundFile);
             cfg.setRAMBufferSizeMB(ramBufferSizeMB);
             cfg.setTermIndexInterval(termIndexIntervalSize);
             cfg.setMergePolicy(mp);
-            // why this?
-            //cfg.setOpenMode(IndexWriterConfig.OpenMode.CREATE);
-
-            // improve ID lookup via LUCENE 4.0 see http://blog.mikemccandless.com/2010/06/lucenes-pulsingcodec-on-primary-key.html
-            // cfg.setCodecProvider()
+            cfg.setMaxThreadStates(8);
+            boolean create = !IndexReader.indexExists(dir);
+            cfg.setOpenMode(create ? IndexWriterConfig.OpenMode.CREATE : IndexWriterConfig.OpenMode.APPEND);
             writer = new IndexWriter(dir, cfg);
             nrtManager = new NRTManager(writer, new SearcherWarmer() {
 
@@ -145,9 +131,11 @@ public class RawLucene {
     }
 
     public Document findById(final long id) {
-        Document result = batchBuffer.get(id);
-        if (result != null)
-            return result;
+        for (Map<Long, Document> mapBuffer : batchBuffer.values()) {
+            Document result = mapBuffer.get(id);
+            if (result != null)
+                return result;
+        }
 
         return searchSomething(new SearchExecutor<Document>() {
 
@@ -219,34 +207,13 @@ public class RawLucene {
         }
     }
 
-    public Document createDocument(String uId, long id) {
+    public Document createDocument(String uId, long id, Class cl) {
         Document doc = new Document();
-        doc.add(newUIdField(UID, uId));
-        doc.add(newIdField(ID, id));
+        Mapping m = getMapping(cl.getSimpleName());
+        doc.add(m.newStringField(RawLucene.TYPE, cl.getSimpleName()));
+        doc.add(m.newUIdField(UID, uId));
+        doc.add(m.newIdField(ID, id));
         return doc;
-    }
-
-    public static Fieldable newDateField(String name, long value) {
-        return new Field(name, DateTools.timeToString(value, DateTools.Resolution.MINUTE),
-                Field.Store.YES, Field.Index.NOT_ANALYZED);
-    }
-
-    public static Fieldable newUIdField(String name, String value) {
-        Field uIdField = new Field(name, value, Field.Store.YES, Field.Index.NOT_ANALYZED_NO_NORMS);
-        uIdField.setIndexOptions(IndexOptions.DOCS_ONLY);
-        return uIdField;
-    }
-
-    public static Fieldable newIdField(String name, long id) {
-        NumericField idField = new NumericField(name, 4, Field.Store.YES, true).setLongValue(id);
-        idField.setIndexOptions(IndexOptions.DOCS_ONLY);
-        return idField;
-    }
-
-    public static Fieldable newStringField(String name, String val) {
-        Field field = new Field(name, val, Field.Store.YES, Field.Index.NOT_ANALYZED_NO_NORMS);
-        field.setIndexOptions(IndexOptions.DOCS_ONLY);
-        return field;
     }
 
     void clear() {
@@ -295,10 +262,15 @@ public class RawLucene {
 
     public long fastPut(long id, Document newDoc) {
         try {
-            batchBuffer.put(id, newDoc);
+            String type = newDoc.get(TYPE);
+            if (type == null)
+                throw new UnsupportedOperationException("Document needs to have a type associated");
+
+            Map<Long, Document> buffer = getBuffer(type);
+            buffer.put(id, newDoc);
             luceneAdds++;
             long currentSearchGeneration = nrtManager.getCurrentSearchingGen(true);
-            if (batchBuffer.size() > maxNumRecordsBeforeIndexing)
+            if (buffer.size() > maxNumRecordsBeforeIndexing)
                 currentSearchGeneration = flush();
 
             return currentSearchGeneration;
@@ -308,11 +280,15 @@ public class RawLucene {
     }
 
     public long put(String uId, long id, Document newDoc) {
+        String type = newDoc.get(TYPE);
+        if (type == null)
+            throw new UnsupportedOperationException("Document needs to have a type associated");
+        Mapping m = getMapping(type);
         if (newDoc.get(ID) == null)
-            newDoc.add(newIdField(ID, id));
+            newDoc.add(m.newIdField(ID, id));
 
         if (newDoc.get(UID) == null)
-            newDoc.add(newUIdField(UID, uId));
+            newDoc.add(m.newUIdField(UID, uId));
 
         return fastPut(id, newDoc);
     }
@@ -385,9 +361,7 @@ public class RawLucene {
         }
     }
 
-    /**
-     * You'll need to call releaseUnmanagedSearcher afterwards
-     */
+    /** You'll need to call releaseUnmanagedSearcher afterwards */
     IndexSearcher newUnmanagedSearcher() {
         SearcherManager sm = nrtManager.getSearcherManager(true);
         return sm.acquire();
@@ -402,10 +376,30 @@ public class RawLucene {
         }
     }
 
+    // TODO instead of async feeding use a queue or batchBuffer and this thread
+    // requirements:
+    // - collect objects up to maximum 1000 to call more efficient addDocuments instead of addDocument
+    // - guarantuee order except if id is identical => in this case overwrite (TODO version/optimistic locking)
+    // - feed listener to watch filters and implement sync e.g. for tests    
+    class FlushThread implements Runnable {
+
+        @Override public void run() {
+            while (true) {
+            }
+        }
+    }
+
     long flush() throws IOException {
-        //TODO UPDATE docs!! 
-        // nrtManager.deleteDocuments(terms);        
-        long currentSearchGeneration = nrtManager.addDocuments(batchBuffer.values());
+        // group by analyzer + indicate if updating or adding -> add the
+        long currentSearchGeneration = -1;
+        for (Entry<String, Map<Long, Document>> docEntries : batchBuffer.entrySet()) {
+            Mapping m = getMapping(docEntries.getKey());
+            // TODO LIMIT count per add
+            currentSearchGeneration = nrtManager.addDocuments(docEntries.getValue().values(), 
+                    m.getAnalyzerWrapper());
+        }
+        // TODO UPDATE nrtManager.updateDocument(term, docs, analyzer);        
+
         luceneAdds += batchBuffer.values().size();
         batchBuffer.clear();
         nrtManager.maybeReopen(true);
@@ -427,13 +421,13 @@ public class RawLucene {
 
     void initRelation(Document edgeDoc, Document vOut, Document vIn) {
         long oIndex = ((NumericField) vOut.getFieldable(ID)).getNumericValue().longValue();
-        edgeDoc.add(newIdField(VERTEX_OUT, oIndex));
+        edgeDoc.add(defaultMapping.newIdField(VERTEX_OUT, oIndex));
         long iIndex = ((NumericField) vIn.getFieldable(ID)).getNumericValue().longValue();
-        edgeDoc.add(newIdField(VERTEX_IN, iIndex));
+        edgeDoc.add(defaultMapping.newIdField(VERTEX_IN, iIndex));
 
         long eId = ((NumericField) edgeDoc.getFieldable(ID)).getNumericValue().longValue();
-        vOut.add(newIdField(EDGE_OUT, eId));
-        vIn.add(newIdField(EDGE_IN, eId));
+        vOut.add(defaultMapping.newIdField(EDGE_OUT, eId));
+        vIn.add(defaultMapping.newIdField(EDGE_IN, eId));
 
         fastPut(oIndex, vOut);
         fastPut(iIndex, vIn);
@@ -446,5 +440,26 @@ public class RawLucene {
             return VERTEX_OUT;
         else
             throw new UnsupportedOperationException("Edge type not supported:" + edgeType);
+    }
+
+    /**
+     * @return never null. Automatically creates a mapping if it does not exist.
+     */
+    public Mapping getMapping(String type) {
+        Mapping m = mappings.get(type);
+        if (m == null) {
+            mappings.put(type, m = new Mapping(type));
+            logger.info("Created mapping for type " + type);
+        }
+        return m;
+    }
+
+    Map<Long, Document> getBuffer(String type) {
+        Map<Long, Document> docs = batchBuffer.get(type);
+        if (docs == null) {
+            docs = new ConcurrentHashMap<Long, Document>();
+            batchBuffer.put(type, docs);
+        }
+        return docs;
     }
 }

@@ -15,14 +15,11 @@
  */
 package com.pannous.lumeo.util;
 
-import com.pannous.lumeo.RawLucene;
 import java.io.Reader;
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.KeywordAnalyzer;
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.WhitespaceAnalyzer;
-import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Fieldable;
+import static com.pannous.lumeo.util.Mapping.*;
 
 /**
  *
@@ -30,9 +27,6 @@ import org.apache.lucene.document.Fieldable;
  */
 public final class SelectiveAnalyzer extends Analyzer {
 
-    public static final Analyzer WHITESPACE_ANALYZER = new WhitespaceAnalyzer(RawLucene.VERSION);
-    public static final Analyzer STANDARD_ANALYZER = new StandardAnalyzer(RawLucene.VERSION);
-    public static final Analyzer KEYWORD_ANALYZER = new KeywordAnalyzer();
     public final Analyzer defaultAnalyzer;
 
     public SelectiveAnalyzer() {
@@ -47,7 +41,7 @@ public final class SelectiveAnalyzer extends Analyzer {
         return getAnalyzer(field).tokenStream(field, reader);
     }
 
-    Analyzer getAnalyzer(String field) {
+    public Analyzer getAnalyzer(String field) {
         if (field.endsWith("_s"))
             return KEYWORD_ANALYZER;
         else if (field.endsWith("_t"))

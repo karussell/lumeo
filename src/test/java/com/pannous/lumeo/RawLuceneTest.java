@@ -15,6 +15,7 @@
  */
 package com.pannous.lumeo;
 
+import com.pannous.lumeo.util.Mapping;
 import com.pannous.lumeo.util.SearchExecutor;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.search.IndexSearcher;
@@ -28,21 +29,31 @@ import static org.junit.Assert.*;
  */
 public class RawLuceneTest extends SimpleLuceneTestBase {
 
+    Mapping m;
+    
+    @Override public void setUp() {
+        super.setUp();
+        m = new Mapping("_default");
+    }
+    
+    class Tmp {
+    }
+
     @Test public void testCount() {
         RawLucene rl = g.getRaw();
 
-        Document doc = new Document();
-        doc.add(RawLucene.newIdField("xy", 12L));
-        doc.add(RawLucene.newStringField("name", "peter"));
+        Document doc = rl.createDocument("tmp", 1, Tmp.class);
+        doc.add(m.newLongField("xy", 12L));
+        doc.add(m.newStringField("name", "peter"));
         rl.put("idSomething", 1, doc);
 
-        doc = new Document();
-        doc.add(RawLucene.newIdField("xy", 1L));
-        doc.add(RawLucene.newStringField("name", "peter"));
+        doc = rl.createDocument("tmp", 1, Tmp.class);
+        doc.add(m.newIdField("xy", 1L));
+        doc.add(m.newStringField("name", "peter"));
         rl.put("idSomething2", 2, doc);
 
-        doc = new Document();
-        doc.add(RawLucene.newStringField("name", "peter 2"));
+        doc = rl.createDocument("tmp", 1, Tmp.class);
+        doc.add(m.newStringField("name", "peter 2"));
         rl.put("idSomething3", 3, doc);
 
         flushAndRefresh();
@@ -52,9 +63,9 @@ public class RawLuceneTest extends SimpleLuceneTestBase {
 
     @Test public void testUpdateDoc() {
         RawLucene rl = g.getRaw();
-        Document doc = new Document();        
         long id = 1;
-        doc.add(RawLucene.newStringField("name", "peter"));        
+        Document doc = rl.createDocument("myId", id, Tmp.class);
+        doc.add(m.newStringField("name", "peter"));
         rl.put("myId", id, doc);
         flushAndRefresh();
         doc = rl.searchSomething(new SearchExecutor<Document>() {
@@ -71,10 +82,9 @@ public class RawLuceneTest extends SimpleLuceneTestBase {
         });
         assertEquals("peter", doc.get("name"));
 
-        doc = new Document();
-        doc.add(RawLucene.newIdField(RawLucene.ID, id));
-        doc.add(RawLucene.newStringField("name", "different"));               
-        rl.update(doc);        
+        doc = rl.createDocument("myId", id, Tmp.class);
+        doc.add(m.newStringField("name", "different"));
+        rl.update(doc);
         flushAndRefresh();
         doc = rl.searchSomething(new SearchExecutor<Document>() {
 

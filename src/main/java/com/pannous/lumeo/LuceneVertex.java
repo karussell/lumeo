@@ -16,11 +16,11 @@ public class LuceneVertex extends LuceneElement implements Vertex {
     }
 
     @Override public Iterable<Edge> getInEdges(final String... labels) {
-        return new EdgeVertexBoundSequence(graph, this, RawLucene.EDGE_IN).setLabels(labels);
+        return new EdgeVertexBoundSequence(g, this, RawLucene.EDGE_IN).setLabels(labels);
     }
 
     @Override public Iterable<Edge> getOutEdges(final String... labels) {
-        return new EdgeVertexBoundSequence(graph, this, RawLucene.EDGE_OUT).setLabels(labels);        
+        return new EdgeVertexBoundSequence(g, this, RawLucene.EDGE_OUT).setLabels(labels);        
     }
 
     @Override public boolean equals(final Object object) {

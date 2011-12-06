@@ -18,7 +18,7 @@ public class LuceneEdge extends LuceneElement implements Edge {
     protected LuceneEdge(final LuceneGraph graph, final Document doc, boolean isNew) {
         super(graph, doc);
         if (isNew) {
-            for (final LuceneAutomaticIndex autoIndex : this.graph.getAutoIndices(LuceneEdge.class)) {
+            for (final LuceneAutomaticIndex autoIndex : this.g.getAutoIndices(LuceneEdge.class)) {
                 autoIndex.autoUpdate(AutomaticIndex.LABEL, this.getLabel(), null, this);
             }
         }
@@ -29,11 +29,11 @@ public class LuceneEdge extends LuceneElement implements Edge {
     }
 
     @Override public Vertex getOutVertex() {
-        return graph.getOutVertex(this);
+        return g.getOutVertex(this);
     }
 
     @Override public Vertex getInVertex() {
-        return graph.getInVertex(this);
+        return g.getInVertex(this);
     }
 
     @Override public boolean equals(final Object object) {

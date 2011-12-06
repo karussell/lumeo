@@ -1,13 +1,14 @@
 package com.pannous.lumeo;
 
+import com.pannous.lumeo.util.Mapping;
 import com.tinkerpop.blueprints.pgm.Edge;
 import com.tinkerpop.blueprints.pgm.Element;
 import com.tinkerpop.blueprints.pgm.impls.StringFactory;
 
 import java.util.HashSet;
 import java.util.Set;
+import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.Field;
 import org.apache.lucene.document.Fieldable;
 import org.apache.lucene.document.NumericField;
 
@@ -16,14 +17,16 @@ import org.apache.lucene.document.NumericField;
  */
 public abstract class LuceneElement implements Element {
 
-    protected final LuceneGraph graph;
+    protected final LuceneGraph g;
     protected Document rawElement;
+    private Mapping m;
 
     public LuceneElement(LuceneGraph graph, Document doc) {
         if (doc == null)
             throw new NullPointerException("Document must not be null");
         this.rawElement = doc;
-        this.graph = graph;
+        this.g = graph;
+        m = g.getMapping(getType());
     }
 
     @Override public Object getProperty(final String key) {
@@ -31,39 +34,33 @@ public abstract class LuceneElement implements Element {
     }
 
     @Override public void setProperty(final String key, final Object value) {
-        if (key.equals(StringFactory.ID) || (key.equals(StringFactory.LABEL) && this instanceof Edge))
+        if (key.equals(RawLucene.ID) || key.equals(RawLucene.TYPE)
+                || (this instanceof Edge && key.equals(RawLucene.EDGE_LABEL)))
             throw new RuntimeException(key + StringFactory.PROPERTY_EXCEPTION_MESSAGE);
 
         try {
-            Object oldValue = this.getProperty(key);
-            for (LuceneAutomaticIndex autoIndex : this.graph.getAutoIndices(this.getClass())) {
+            Object oldValue = this.getProperty(key);            
+            for (LuceneAutomaticIndex autoIndex : this.g.getAutoIndices(this.getClass())) {
                 autoIndex.autoUpdate(key, value, oldValue, this);
             }
-
-            this.rawElement.add(new Field(key, value.toString(), Field.Store.NO, Field.Index.NOT_ANALYZED_NO_NORMS));
-        } catch (RuntimeException e) {
-            throw e;
         } catch (Exception e) {
             throw new RuntimeException(e.getMessage(), e);
         }
     }
 
     @Override public Object removeProperty(final String key) {
-        throw new UnsupportedOperationException();
-//        try {            
-//            Object oldValue = this.rawElement.removeProperty(key);
-//            if (null != oldValue) {
-//                for (LuceneAutomaticIndex autoIndex : this.graph.getAutoIndices(this.getClass())) {
-//                    autoIndex.autoRemove(key, oldValue, this);
-//                }
-//            }
-//
-//            return oldValue;
-//        } catch (RuntimeException e) {
-//            throw e;
-//        } catch (Exception e) {
-//            throw new RuntimeException(e.getMessage(), e);
-//        }
+        try {
+            String oldValue = rawElement.get(key);
+            rawElement.removeField(key);
+            if (oldValue != null)
+                for (LuceneAutomaticIndex autoIndex : this.g.getAutoIndices(this.getClass())) {
+                    autoIndex.autoRemove(key, oldValue, this);
+                }
+
+            return oldValue;
+        } catch (Exception e) {
+            throw new RuntimeException(e.getMessage(), e);
+        }
     }
 
     @Override public Set<String> getPropertyKeys() {
@@ -86,7 +83,18 @@ public abstract class LuceneElement implements Element {
         return ((NumericField) rawElement.getFieldable(RawLucene.ID)).getNumericValue().longValue();
     }
 
+    public String getType() {
+        String t = rawElement.get(RawLucene.TYPE);
+        if (t == null)
+            throw new NullPointerException("No type available for " + getId());
+        return t;
+    }
+
     @Override public boolean equals(final Object object) {
         return (null != object) && (this.getClass().equals(object.getClass()) && this.getId().equals(((Element) object).getId()));
+    }
+
+    Analyzer getAnalyzer(String field) {
+        return m.getAnalyzer(field);
     }
 }

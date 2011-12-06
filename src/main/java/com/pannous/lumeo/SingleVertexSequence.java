@@ -48,8 +48,7 @@ public class SingleVertexSequence extends VertexFilterSequence {
 
     @Override public Vertex next() {
         hasNext = false;
-        return v;
-    
+        return v;    
     }
 
     @Override public void remove() {

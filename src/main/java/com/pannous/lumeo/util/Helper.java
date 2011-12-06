@@ -18,6 +18,8 @@ package com.pannous.lumeo.util;
 import com.tinkerpop.blueprints.pgm.CloseableSequence;
 import com.tinkerpop.blueprints.pgm.Edge;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 /**
  *
@@ -25,26 +27,7 @@ import java.util.Iterator;
  */
 public class Helper {
 
-//    public static Iterator<Edge> EMPTY_EDGE_ITERATOR = new EmptyIterator<Edge>();    
-//
-//    private static class EmptyIterator<T> implements Iterator<T> {
-//
-//        @Override
-//        public boolean hasNext() {
-//            return false;
-//        }
-//
-//        @Override
-//        public T next() {
-//            throw new UnsupportedOperationException("Empty Collection => Empty Iterator");
-//        }
-//
-//        @Override
-//        public void remove() {
-//            throw new UnsupportedOperationException("Empty Collection => Empty Iterator");
-//        }
-//    }
-    public static CloseableSequence<Edge> EMPTY_EDGE_SEQUENCE = new EmptyCloseableSequence<Edge>();    
+    public static CloseableSequence<Edge> EMPTY_EDGE_SEQUENCE = new EmptyCloseableSequence<Edge>();
 
     private static class EmptyCloseableSequence<T> implements CloseableSequence<T> {
 
@@ -64,12 +47,20 @@ public class Helper {
         }
 
         @Override
-        public void close() {            
+        public void close() {
         }
 
         @Override
         public Iterator<T> iterator() {
             return this;
         }
-    }    
+    }
+
+    public static <T> Set<T> set(T... keys) {
+        Set<T> set = new LinkedHashSet<T>(keys.length);
+        for (T s : keys) {
+            set.add(s);
+        }
+        return set;
+    }
 }

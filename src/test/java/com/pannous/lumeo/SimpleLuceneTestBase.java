@@ -15,9 +15,10 @@
  */
 package com.pannous.lumeo;
 
-import com.pannous.lumeo.LuceneGraph;
+import com.tinkerpop.blueprints.pgm.CloseableSequence;
 import org.junit.After;
 import org.junit.Before;
+import static org.junit.Assert.*;
 
 /**
  *
@@ -38,5 +39,14 @@ public class SimpleLuceneTestBase {
     protected void flushAndRefresh() {
         g.flush();
         g.refresh();
+    }
+
+    public void assertCount(int exp, CloseableSequence seq) {
+        int c = 0;
+        while (seq.hasNext()) {
+            seq.next();
+            c++;
+        }
+        assertEquals("length of sequence does not match", exp, c);
     }
 }

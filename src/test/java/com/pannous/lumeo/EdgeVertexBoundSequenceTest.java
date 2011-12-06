@@ -35,17 +35,17 @@ public class EdgeVertexBoundSequenceTest extends SimpleLuceneTestBase {
         flushAndRefresh();
 
         EdgeVertexBoundSequence eSeq = new EdgeVertexBoundSequence(g, (LuceneVertex) v1, RawLucene.EDGE_IN);
-        assertSeqLength(0, eSeq);
+        assertCount(0, eSeq);
 
         Vertex v3 = g.addVertex("jetslideapp");
         g.addEdge("idEdge2", v3, v1, "twitteraccounting");
         flushAndRefresh();
 
         eSeq = new EdgeVertexBoundSequence(g, (LuceneVertex) v1, RawLucene.EDGE_IN);
-        assertSeqLength(1, eSeq);
+        assertCount(1, eSeq);
 
         eSeq = new EdgeVertexBoundSequence(g, (LuceneVertex) v1);
-        assertSeqLength(2, eSeq);
+        assertCount(2, eSeq);
 
         eSeq = new EdgeVertexBoundSequence(g, (LuceneVertex) v1, RawLucene.EDGE_IN, RawLucene.EDGE_OUT);
         assertTrue(eSeq.hasNext());
@@ -68,21 +68,12 @@ public class EdgeVertexBoundSequenceTest extends SimpleLuceneTestBase {
         flushAndRefresh();
 
         EdgeVertexBoundSequence eSeq = new EdgeVertexBoundSequence(g, (LuceneVertex) v1, RawLucene.EDGE_IN).setLabels("twitteraccounting");
-        assertSeqLength(1, eSeq);
+        assertCount(1, eSeq);
 
         eSeq = new EdgeVertexBoundSequence(g, (LuceneVertex) v1, RawLucene.EDGE_IN).setLabels("twitteraccount");
-        assertSeqLength(0, eSeq);
+        assertCount(0, eSeq);
 
         eSeq = new EdgeVertexBoundSequence(g, (LuceneVertex) v1).setLabels("twitteraccounting");
-        assertSeqLength(1, eSeq);
-    }
-
-    void assertSeqLength(int expected, CloseableSequence seq) {
-        int counter = 0;
-        while (seq.hasNext()) {
-            seq.next();
-            counter++;
-        }
-        assertEquals("length of sequence mismatch", expected, counter);
+        assertCount(1, eSeq);
     }
 }

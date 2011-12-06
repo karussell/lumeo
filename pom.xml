@@ -12,6 +12,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <slf4j.version>1.6.3</slf4j.version>
         <lucene.version>3.5.0</lucene.version>        
+<!--        <lucene.version>4.0-dev</lucene.version>        -->
         <blueprints.version>1.1-SNAPSHOT</blueprints.version>
     </properties>
     <dependencies>        

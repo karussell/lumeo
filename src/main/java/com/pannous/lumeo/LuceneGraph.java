@@ -1,5 +1,6 @@
 package com.pannous.lumeo;
 
+import com.pannous.lumeo.util.Mapping;
 import com.tinkerpop.blueprints.pgm.AutomaticIndex;
 import com.tinkerpop.blueprints.pgm.Edge;
 import com.tinkerpop.blueprints.pgm.Element;
@@ -9,14 +10,15 @@ import com.tinkerpop.blueprints.pgm.TransactionalGraph;
 import com.tinkerpop.blueprints.pgm.Vertex;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.NumericField;
 import org.apache.lucene.store.RAMDirectory;
@@ -74,17 +76,32 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         return createAutomaticIndex(indexName, indexClass, null);
     }
 
-    @Override public synchronized <T extends Element> AutomaticIndex<T> createAutomaticIndex(final String indexName, final Class<T> indexClass, Set<String> keys) {
-        /**
-         * There is one index per class!
-         * TODO avoid indexing of the specified keys
-         */
+    @Override public synchronized <T extends Element> AutomaticIndex<T> createAutomaticIndex(final String indexName,
+            final Class<T> indexClass, Set<String> keys) {
         LuceneAutomaticIndex index = indices.get(indexClass);
-        if (index == null) {
-            index = new LuceneAutomaticIndex<T>(this, indexClass);
-            indices.put(indexClass, index);
+        if (index != null)
+            throw new UnsupportedOperationException("index for " + indexClass + " already exists");
+        if (keys == null)
+            throw new UnsupportedOperationException("you need to specify key which should get indexed for " + indexClass);
+
+        Mapping m = getMapping(indexClass.getSimpleName());
+        for (String k : keys) {
+            Mapping.Type type = Mapping.Type.STRING;
+            int pos = k.indexOf(",");
+            if (pos >= 0) {
+                type = Mapping.Type.valueOf(k.substring(pos + 1));
+                k = k.substring(0, pos);
+            }
+
+            m.putField(k, type);
         }
-        // else index for this class exists
+
+        index = new LuceneAutomaticIndex<T>(this, indexClass, m);
+        indices.put(indexClass, index);
+        if (Vertex.class.isAssignableFrom(indexClass))
+            indices.put(LuceneVertex.class, index);
+        else if (Edge.class.isAssignableFrom(indexClass))
+            indices.put(LuceneEdge.class, index);
         return index;
     }
 
@@ -129,8 +146,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
                 if (id < 0)
                     id = atomicCounter.incrementAndGet();
 
-                doc = rawLucene.createDocument(userId, id);
-                doc.add(RawLucene.newStringField(RawLucene.TYPE, Vertex.class.getSimpleName()));
+                doc = rawLucene.createDocument(userId, id, Vertex.class);
                 rawLucene.put(userId, id, doc);
             }
 
@@ -160,7 +176,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
 
     @Override public Iterable<Edge> getEdges() {
         return new EdgeFilterSequence(this);
-    }    
+    }
 
     @Override public Edge addEdge(final Object userIdObj, final Vertex outVertex, final Vertex inVertex, final String label) {
         try {
@@ -181,9 +197,8 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
                 if (id < 0)
                     id = atomicCounter.incrementAndGet();
 
-                edgeDoc = rawLucene.createDocument(userId, id);
-                edgeDoc.add(RawLucene.newStringField(RawLucene.TYPE, Edge.class.getSimpleName()));
-                edgeDoc.add(RawLucene.newStringField(RawLucene.EDGE_LABEL, label));
+                edgeDoc = rawLucene.createDocument(userId, id, Edge.class);
+                edgeDoc.add(getMapping(Edge.class.getSimpleName()).newStringField(RawLucene.EDGE_LABEL, label));
             }
 
             rawLucene.initRelation(edgeDoc, ((LuceneElement) outVertex).getRaw(), ((LuceneElement) inVertex).getRaw());
@@ -217,10 +232,10 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
     }
 
      <T extends Element> Collection<LuceneAutomaticIndex<T>> getAutoIndices(Class<T> cl) {
-        Collection<LuceneAutomaticIndex<T>> tmp = (Collection<LuceneAutomaticIndex<T>>) indices.get(cl);
+        LuceneAutomaticIndex<T> tmp = (LuceneAutomaticIndex<T>) indices.get(cl);
         if (tmp == null)
             return Collections.EMPTY_LIST;
-        return tmp;
+        return Collections.<LuceneAutomaticIndex<T>>singletonList(tmp);
     }
 
     @Override public int getMaxBufferSize() {
@@ -287,7 +302,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         rawLucene.refresh();
     }
 
-    Analyzer getAnalyzer() {
-        return rawLucene.getAnalyzer();
+    Mapping getMapping(String type) {
+        return rawLucene.getMapping(type);
     }
 }

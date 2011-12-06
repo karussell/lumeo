@@ -1,4 +1,5 @@
-make cool stuff working under LuceneGraphTest (somefield_t and do only store fields which are not in propertyKey)
+index only fields explicitely mentioned in indices! otherwise only store them
+make cool lucene stuff working under LuceneGraphTest (somefield_t and do only store fields which are not in propertyKey)
 check type filtering (e.g. create edge + vertex of same userId!)
 
 make things thread safe. 
@@ -8,8 +9,19 @@ make things thread safe.
 check if all methods are implemented
 make tests passing
 
+instead of storing -> use only one _source field
+
+use CachingWrapperFilter?
+
+use FilteredDocIdSet to better traverse a prefiltered graph
+
 remove difference of edge and vertex in/out ? 
     this or something else would be necessary if we introduce shortcut from vertex to vertex
+
+use trove collection where possible (e.g. for uncommited buffer?)
+
+improve ID lookup via LUCENE 4.0 see http://blog.mikemccandless.com/2010/06/lucenes-pulsingcodec-on-primary-key.html
+    indexWriterConfig.setCodecProvider()
 
 faster field fetching via doc values
   http://www.searchworkings.org/blog/-/blogs/introducing-lucene-index-doc-values

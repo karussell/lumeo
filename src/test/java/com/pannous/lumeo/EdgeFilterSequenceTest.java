@@ -15,7 +15,7 @@
  */
 package com.pannous.lumeo;
 
-import com.pannous.lumeo.EdgeFilterSequence;
+import com.pannous.lumeo.util.Helper;
 import com.pannous.lumeo.util.TermFilter;
 import com.tinkerpop.blueprints.pgm.Edge;
 import java.util.Iterator;
@@ -31,6 +31,7 @@ import static org.junit.Assert.*;
 public class EdgeFilterSequenceTest extends SimpleLuceneTestBase {
 
     @Test public void testIterator() {
+        g.createAutomaticIndex("edges", Edge.class, Helper.<String>set("association"));
         Vertex x1 = g.addVertex("test");
         Vertex x2 = g.addVertex("test2");
         Edge e = g.addEdge(null, x1, x2, "association");
@@ -44,22 +45,23 @@ public class EdgeFilterSequenceTest extends SimpleLuceneTestBase {
     }
 
     @Test public void testIteratorWithVertexFilter() {
+        g.createAutomaticIndex("vertices", Edge.class, Helper.<String>set("hello"));
+        g.createAutomaticIndex("vertices", Vertex.class, Helper.<String>set("hellov"));
         Vertex x1 = g.addVertex("final");        
         Vertex x2 = g.addVertex("countdown");
         Edge e = g.addEdge(null, x1, x2, "association");
         e.setProperty("hello", "test");
+        e.setProperty("hellov", "test");
         
         Vertex x3 = g.addVertex("test");
         x3.setProperty("hello", "test");        
         e = g.addEdge(null, x1, x3, "association2");
         e.setProperty("hello", "world");
+        e.setProperty("hellov", "world");
         flushAndRefresh();
         
-        LuceneFilterSequence<Edge> seq = new EdgeFilterSequence(g).setFilter(new TermFilter(new Term("hello", "world")));
-        Iterator<Edge> iter = seq.iterator();
-        assertTrue(iter.hasNext());
-        assertEquals(e, iter.next());
-        assertFalse(iter.hasNext());
+        assertCount(1, new EdgeFilterSequence(g).setFilter(new TermFilter(new Term("hello", "world"))));        
+        assertCount(0, new EdgeFilterSequence(g).setFilter(new TermFilter(new Term("hellov", "world"))));
     }
 
     @Test

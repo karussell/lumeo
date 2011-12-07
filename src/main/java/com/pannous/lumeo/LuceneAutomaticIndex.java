@@ -31,20 +31,18 @@ public class LuceneAutomaticIndex<T extends Element> extends LuceneIndex<T> impl
     }
 
     protected void autoUpdate(final String key, final Object newValue, final Object oldValue, final T element) {
-        if (handle(key)) {
-            if (oldValue != null)
-                removeField(key, element);
+        // accept all keys to store them
+        if (oldValue != null)
+            removeField(key, element);
 
-            putField(m.createField(key, newValue), element);
-            g.getRaw().fastPut((Long) element.getId(), ((LuceneElement) element).getRaw());
-        }
+        putField(m.createField(key, newValue), element);
+        g.getRaw().fastPut((Long) element.getId(), ((LuceneElement) element).getRaw());
     }
 
     protected void autoRemove(final String key, final Object oldValue, final T element) {
-        if (handle(key)) {
-            removeField(key, element);
-            g.getRaw().fastPut((Long) element.getId(), ((LuceneElement) element).getRaw());
-        }
+        // accept all keys to remove stored
+        removeField(key, element);
+        g.getRaw().fastPut((Long) element.getId(), ((LuceneElement) element).getRaw());
     }
 
     @Override public CloseableSequence<T> get(final String key, final Object value) {

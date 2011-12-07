@@ -1,3 +1,5 @@
+das fremde kind -> bibo buch
+
 index only fields explicitely mentioned in indices! otherwise only store them
     see EdgeFilterSequenceTest -> why is hellov filter not working?
 make cool lucene stuff working under LuceneGraphTest (somefield_t and do only store fields which are not in propertyKey)

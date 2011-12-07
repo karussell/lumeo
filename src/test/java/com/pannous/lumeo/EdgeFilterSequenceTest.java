@@ -36,7 +36,7 @@ public class EdgeFilterSequenceTest extends SimpleLuceneTestBase {
         Vertex x2 = g.addVertex("test2");
         Edge e = g.addEdge(null, x1, x2, "association");
         flushAndRefresh();
-        
+
         EdgeFilterSequence seq = new EdgeFilterSequence(g);
         Iterator<Edge> iter = seq.iterator();
         assertTrue(iter.hasNext());
@@ -47,21 +47,27 @@ public class EdgeFilterSequenceTest extends SimpleLuceneTestBase {
     @Test public void testIteratorWithVertexFilter() {
         g.createAutomaticIndex("edges", Edge.class, Helper.<String>set("hello"));
         g.createAutomaticIndex("vertices", Vertex.class, Helper.<String>set("hellov"));
-        Vertex x1 = g.addVertex("final");        
+        Vertex x1 = g.addVertex("final");
         Vertex x2 = g.addVertex("countdown");
         Edge e = g.addEdge(null, x1, x2, "association");
         e.setProperty("hello", "test");
         e.setProperty("hellov", "test");
-        
+
         Vertex x3 = g.addVertex("test");
-        x3.setProperty("hello", "test");        
+        x3.setProperty("hello", "test");
         e = g.addEdge(null, x1, x3, "association2");
         e.setProperty("hello", "world");
         e.setProperty("hellov", "world");
         flushAndRefresh();
-        
-        assertCount(1, new EdgeFilterSequence(g).setFilter(new TermFilter(new Term("hello", "world"))));        
+
+        assertCount(1, new EdgeFilterSequence(g).setFilter(new TermFilter(new Term("hello", "world"))));
+
+        // hellov gets not indexed
         assertCount(0, new EdgeFilterSequence(g).setFilter(new TermFilter(new Term("hellov", "world"))));
+
+        // ... but stored
+        e = new EdgeFilterSequence(g).setFilter(new TermFilter(new Term("hello", "world"))).next();
+        assertEquals("world", e.getProperty("hellov"));
     }
 
     @Test

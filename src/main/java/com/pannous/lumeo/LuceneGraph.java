@@ -109,6 +109,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         if (i == null)
             throw new UnsupportedOperationException("index not found " + indexName + " ," + indexClass);
         
+        // there is only one index per class at the moment
         if(!indexName.equals(i.getIndexName()))
             throw new UnsupportedOperationException("index with name " + indexName + " not found");
         

@@ -1,6 +1,7 @@
 package com.pannous.lumeo;
 
 import com.pannous.lumeo.util.Mapping;
+import com.pannous.lumeo.util.Mapping.Type;
 import com.tinkerpop.blueprints.pgm.AutomaticIndex;
 import com.tinkerpop.blueprints.pgm.Edge;
 import com.tinkerpop.blueprints.pgm.Element;
@@ -10,6 +11,7 @@ import com.tinkerpop.blueprints.pgm.TransactionalGraph;
 import com.tinkerpop.blueprints.pgm.Vertex;
 
 import java.io.IOException;
+import java.net.SocketTimeoutException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -84,14 +86,35 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
 
         Mapping m = getMapping(indexClass.getSimpleName());
         for (String k : keys) {
+            // DEFAULT type for all keys is normal string!
             Mapping.Type type = Mapping.Type.STRING;
             int pos = k.indexOf(",");
+//            int posUnderscore = k.indexOf("_");
             if (pos >= 0) {
                 type = Mapping.Type.valueOf(k.substring(pos + 1));
                 k = k.substring(0, pos);
             }
+//            else if (posUnderscore >= 0) {
+//                boolean found = true;
+//                String typeStr = k.substring(posUnderscore + 1);
+//                if (typeStr.equals("t"))
+//                    type = Type.TEXT;
+//                else if (typeStr.equals("dt"))
+//                    type = Type.DATE;
+//                else if (typeStr.equals("s"))
+//                    type = Type.STRING;
+//                else if (typeStr.equals("l"))
+//                    type = Type.LONG;
+//                else
+//                    found = false;
+//                
+//                if(found)
+//                    k = k.substring(0, posUnderscore);
+//            }
 
-            m.putField(k, type);
+            Type old = m.putField(k, type);
+            if (old != null)
+                throw new UnsupportedOperationException("Property was defined multiple times! new:" + k + " old:" + old);
         }
 
         index = new LuceneAutomaticIndex<T>(this, indexClass, m);
@@ -108,11 +131,11 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         Index i = indices.get(indexClass);
         if (i == null)
             throw new UnsupportedOperationException("index not found " + indexName + " ," + indexClass);
-        
+
         // there is only one index per class at the moment
-        if(!indexName.equals(i.getIndexName()))
+        if (!indexName.equals(i.getIndexName()))
             throw new UnsupportedOperationException("index with name " + indexName + " not found");
-        
+
         return (Index<T>) i;
     }
 

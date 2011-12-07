@@ -15,6 +15,7 @@
  */
 package com.pannous.lumeo;
 
+import java.util.Iterator;
 import com.tinkerpop.blueprints.pgm.CloseableSequence;
 import org.junit.After;
 import org.junit.Before;
@@ -48,5 +49,16 @@ public class SimpleLuceneTestBase {
             c++;
         }
         assertEquals("length of sequence does not match", exp, c);
+    }
+    
+    
+    public void assertCount(int exp, Iterable iter) {
+        int c = 0;
+        Iterator seq = iter.iterator();
+        while (seq.hasNext()) {
+            seq.next();
+            c++;
+        }
+        assertEquals("length of iterable does not match", exp, c);
     }
 }

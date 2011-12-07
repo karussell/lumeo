@@ -17,21 +17,17 @@ package com.pannous.lumeo;
 
 import com.pannous.lumeo.util.Helper;
 import com.tinkerpop.blueprints.pgm.AutomaticIndex;
-import java.util.Iterator;
 import com.tinkerpop.blueprints.pgm.CloseableSequence;
 import com.tinkerpop.blueprints.pgm.Vertex;
-import java.util.LinkedHashSet;
-import java.util.Set;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
 /**
- *
  * @author Peter Karich, info@jetsli.de
  */
 public class LuceneGraphTest extends SimpleLuceneTestBase {
 
-    @Test public void testCreateAutomaticIndex() {        
+    @Test public void testCreateAutomaticIndex() {
         String indexName = "index1";
         g.createAutomaticIndex(indexName, Vertex.class, Helper.set("fieldA"));
         Vertex v = g.addVertex("peter");
@@ -40,12 +36,10 @@ public class LuceneGraphTest extends SimpleLuceneTestBase {
         flushAndRefresh();
 
         CloseableSequence<Vertex> seq = g.getIndex(indexName, Vertex.class).get("fieldA", "pest");
-        assertFalse(seq.hasNext());
+        assertCount(0, seq);
 
         seq = g.getIndex(indexName, Vertex.class).get("fieldA", "test");
-        assertTrue(seq.hasNext());
-        seq.next();
-        assertFalse(seq.hasNext());
+        assertCount(1, seq);
 
         try {
             seq = g.getIndex(indexName, Vertex.class).get("fieldB", "pest");
@@ -56,30 +50,52 @@ public class LuceneGraphTest extends SimpleLuceneTestBase {
 
     @Test public void testAutoUpdateVertex() {
         Vertex v = g.addVertex("peter");
-        assertNotNull(v);        
+        assertNotNull(v);
         AutomaticIndex<Vertex> index = g.createAutomaticIndex("vertex", Vertex.class, Helper.set("fullname", "fullname2,TEXT"));
         v.setProperty("fullname", "peter something");
         flushAndRefresh();
 
         CloseableSequence<Vertex> seq = index.get("fullname", "peter something");
-        assertTrue(seq.hasNext());
-        seq.next();
-        assertFalse(seq.hasNext());
+        assertCount(1, seq);
 
         seq = index.get("fullname", "peter");
-        assertFalse(seq.hasNext());
+        assertCount(0, seq);
 
         // Now do some lucene magic ...
         v.setProperty("fullname2", "peter something");
+        v.setProperty("fullname3", "peter some thing");
         flushAndRefresh();
 
         // ... and search via StandardAnalyzer due to ",TEXT"
         seq = index.get("fullname2", "peter");
-        assertTrue(seq.hasNext());
-        seq.next();
-        assertFalse(seq.hasNext());
+        assertCount(1, seq);
+
+        try {
+            g.createAutomaticIndex("vertex", Vertex.class, Helper.set("fullname", "fullname,TEXT"));
+            assertFalse("exception should be raised for multiple key definition", true);
+        } catch (Exception ex) {
+        }
+
+        try {
+            seq = index.get("unsupportedkey", "peter");
+            assertFalse("exception should be raised for unsupported property", true);
+        } catch (Exception ex) {
+        }
     }
 
+    // not sure if we should really introduce this notation, as it is not clear weather
+    // the field name is fullname or fullname_t    
+//    @Test public void testUnderscoreNotation() {        
+//        try {
+//            g.createAutomaticIndex("vertex", Vertex.class, Helper.set("fullname", "fullname_t"));
+//            assertFalse("exception should be raised for multiple key definition", true);
+//        } catch (Exception ex) {
+//        }
+//        g.createAutomaticIndex("vertex", Vertex.class, Helper.set("fullname3"));
+//        seq = index.get("fullname3", "thing");
+//        assertCount(1, seq);
+//    }
+    
     @Test public void testAddAndRemoveVertex() {
         Vertex v = g.addVertex("peter");
         assertNotNull(v);
@@ -95,9 +111,6 @@ public class LuceneGraphTest extends SimpleLuceneTestBase {
         flushAndRefresh();
         assertNull(g.getVertex("peter"));
 
-        Iterator<Vertex> iter = g.getVertices().iterator();
-        assertTrue(iter.hasNext());
-        iter.next();
-        assertFalse(iter.hasNext());
+        assertCount(1, g.getVertices());
     }
 }

@@ -56,10 +56,10 @@ public class Mapping {
         this.type = type;
     }
 
-    public Mapping putField(String key, Type type) {
-        fieldToTypeMapping.put(key, type);
-        Type t = fieldToTypeMapping.get(key);
-        switch (t) {
+    /** @return true if no previous type was overwritten */
+    public Type putField(String key, Type type) {
+        Type oldType = fieldToTypeMapping.put(key, type);                
+        switch (type) {
             case TEXT:
                 analyzer.addAnalyzer(key, STANDARD_ANALYZER);
                 break;
@@ -73,7 +73,7 @@ public class Mapping {
             default:
                 throw new IllegalStateException("something went wrong while determing analyzer for type " + type);
         }
-        return this;
+        return oldType;
     }
 
     public Set<String> getIndexedFields() {

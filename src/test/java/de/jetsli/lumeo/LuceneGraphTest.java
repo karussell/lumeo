@@ -15,14 +15,10 @@
  */
 package de.jetsli.lumeo;
 
-import de.jetsli.lumeo.EdgeFilterSequence;
-import com.tinkerpop.blueprints.pgm.Edge;
 import de.jetsli.lumeo.util.Helper;
-import de.jetsli.lumeo.util.TermFilter;
 import com.tinkerpop.blueprints.pgm.AutomaticIndex;
 import com.tinkerpop.blueprints.pgm.CloseableSequence;
 import com.tinkerpop.blueprints.pgm.Vertex;
-import org.apache.lucene.index.Term;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -110,6 +106,16 @@ public class LuceneGraphTest extends SimpleLuceneTestBase {
         Vertex v2 = g.addVertex("peter2");
         g.addEdge("peter", v, v2, "some label");
         flushAndRefresh();
-        assertCount(1, new EdgeFilterSequence(g));        
+        assertCount(1, new EdgeFilterSequence(g));
+    }
+
+    @Test public void testDeleteVertex() {
+        Vertex v = g.addVertex("peter");
+        flushAndRefresh();
+        assertCount(1, new VertexFilterSequence(g));
+
+        g.removeVertex(v);
+        flushAndRefresh();
+        assertCount(0, new VertexFilterSequence(g));
     }
 }

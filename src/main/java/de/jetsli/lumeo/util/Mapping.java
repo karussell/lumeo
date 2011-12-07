@@ -29,6 +29,7 @@ import org.apache.lucene.document.Field;
 import org.apache.lucene.document.Fieldable;
 import org.apache.lucene.document.NumericField;
 import org.apache.lucene.index.FieldInfo.IndexOptions;
+import org.apache.lucene.util.NumericUtils;
 
 /**
  * This class defines how specific field will be indexed and queried (if stored, which analyzers, ...)
@@ -58,7 +59,7 @@ public class Mapping {
 
     /** @return true if no previous type was overwritten */
     public Type putField(String key, Type type) {
-        Type oldType = fieldToTypeMapping.put(key, type);                
+        Type oldType = fieldToTypeMapping.put(key, type);
         switch (type) {
             case TEXT:
                 analyzer.addAnalyzer(key, STANDARD_ANALYZER);
@@ -154,5 +155,18 @@ public class Mapping {
 
     @Override public String toString() {
         return type + " - mapping:" + fieldToTypeMapping;
+    }
+
+    public String toTermString(Object o) {
+        if (o instanceof String)
+            return (String) o;
+        else if (o instanceof Long)
+            return NumericUtils.longToPrefixCoded((Long) o);
+        else if (o instanceof Double)
+            return NumericUtils.doubleToPrefixCoded((Double) o);
+        else if (o instanceof Date)
+            return DateTools.timeToString(((Date) o).getTime(), DateTools.Resolution.MINUTE);
+        else
+            throw new UnsupportedOperationException("couldn't transform into string " + o);
     }
 }

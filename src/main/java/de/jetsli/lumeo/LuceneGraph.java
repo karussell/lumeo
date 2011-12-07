@@ -3,6 +3,7 @@ package de.jetsli.lumeo;
 import de.jetsli.lumeo.util.Mapping;
 import de.jetsli.lumeo.util.Mapping.Type;
 import com.tinkerpop.blueprints.pgm.AutomaticIndex;
+import com.tinkerpop.blueprints.pgm.CloseableSequence;
 import com.tinkerpop.blueprints.pgm.Edge;
 import com.tinkerpop.blueprints.pgm.Element;
 import com.tinkerpop.blueprints.pgm.Index;
@@ -43,7 +44,7 @@ import org.slf4j.LoggerFactory;
  * - no transaction support
  * 
  * TODO
- * - caching is bad at the moment. also test advanced caching strategies (e.g. measure degree centrality, cluster   )
+ * - caching is bad at the moment. also test advanced caching strategies (e.g. measure degree centrality, cluster)
  *   especially use FieldCache for user and long IDs
  * - Use several tuning possibilities in Lucene
  * - Reimplement a subset of the lucene functionality by using search trees in the graph?
@@ -172,12 +173,8 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         return new LuceneVertex(this, doc);
     }
 
-    @Override public Iterable<Vertex> getVertices() {
+    @Override public CloseableSequence<Vertex> getVertices() {
         return new VertexFilterSequence(this);
-    }
-
-    @Override public void removeVertex(final Vertex vertex) {
-        rawLucene.removeById((Long) vertex.getId());
     }
 
     @Override public Iterable<Edge> getEdges() {
@@ -234,7 +231,11 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
     }
 
     @Override public void removeEdge(final Edge edge) {
-        throw new UnsupportedOperationException("not yet supported");
+        rawLucene.removeById((Long) edge.getId());
+    }
+        
+    @Override public void removeVertex(final Vertex vertex) {
+        rawLucene.removeById((Long) vertex.getId());
     }
 
      <T extends Element> Collection<LuceneAutomaticIndex<T>> getAutoIndices(Class<T> cl) {

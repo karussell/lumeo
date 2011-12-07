@@ -20,11 +20,9 @@ import de.jetsli.lumeo.util.Mapping;
 import de.jetsli.lumeo.util.SearchExecutor;
 import java.io.File;
 import java.io.IOException;
-import java.util.Date;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
-import org.apache.lucene.document.DateTools;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.NumericField;
 import org.apache.lucene.index.IndexReader;
@@ -72,7 +70,6 @@ public class RawLucene {
     private Term idTerm = new Term(ID, "");
     private int bloomFilterSize = 50 * 1024 * 1024;
     private int maxNumRecordsBeforeIndexing = 500000;
-//    private OpenBitSet bloomFilter;
     //Avoid Lucene performing "mega merges" with a finite limit on segments sizes that can be merged
     private int maxMergeMB = 3000;
     private long luceneAdds = 0;
@@ -220,7 +217,7 @@ public class RawLucene {
         return searchSomething(new SearchExecutor<Long>() {
 
             @Override public Long execute(IndexSearcher searcher) throws Exception {
-                Term searchTerm = new Term(fieldName, toTermString(value));
+                Term searchTerm = new Term(fieldName, defaultMapping.toTermString(value));
                 TermDocs td = searcher.getIndexReader().termDocs(searchTerm);
                 try {
                     long c = 0;
@@ -233,19 +230,6 @@ public class RawLucene {
                 }
             }
         });
-    }
-
-    String toTermString(Object o) {
-        if (o instanceof String)
-            return (String) o;
-        else if (o instanceof Long)
-            return NumericUtils.longToPrefixCoded((Long) o);
-        else if (o instanceof Double)
-            return NumericUtils.doubleToPrefixCoded((Double) o);
-        else if (o instanceof Date)
-            return DateTools.timeToString(((Date) o).getTime(), DateTools.Resolution.MINUTE);
-        else
-            throw new UnsupportedOperationException("couldn't transform into string " + o);
     }
 
     long removeById(final long id) {
@@ -291,7 +275,7 @@ public class RawLucene {
 
      <T extends LuceneElement> void update(Document doc) {
         long id = ((NumericField) doc.getFieldable(ID)).getNumericValue().longValue();
-        // TODO PERFORMANCE should we really check?
+        // TODO PERFORMANCE should we really check or should we always remove?
         if (exists(id))
             removeById(id);
         fastPut(id, doc);
@@ -370,6 +354,11 @@ public class RawLucene {
         } catch (IOException ex) {
             throw new RuntimeException(ex);
         }
+    }
+
+    void removeDoc(Document doc) {
+        long id = ((NumericField) doc.getFieldable(ID)).getNumericValue().longValue();
+        removeById(id);
     }
 
     // TODO instead of async feeding use a queue or batchBuffer and this thread

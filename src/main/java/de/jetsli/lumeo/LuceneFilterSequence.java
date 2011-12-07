@@ -51,6 +51,7 @@ public abstract class LuceneFilterSequence<T> implements CloseableSequence<T> {
     private IndexSearcher searcher;
     private Query query;
     private boolean closed = false;
+    private Document doc;
 
     private LuceneFilterSequence() {
     }
@@ -130,7 +131,7 @@ public abstract class LuceneFilterSequence<T> implements CloseableSequence<T> {
             if (index >= docs.scoreDocs.length)
                 docs = searcher.searchAfter(docs.scoreDocs[n - 1], query, filter, n);
 
-            Document doc = searcher.doc(docs.scoreDocs[index++].doc);
+            doc = searcher.doc(docs.scoreDocs[index++].doc);
             return createElement(doc);
         } catch (Exception ex) {
             throw new RuntimeException(ex);
@@ -138,7 +139,7 @@ public abstract class LuceneFilterSequence<T> implements CloseableSequence<T> {
     }
 
     @Override public void remove() {
-        throw new UnsupportedOperationException("Not supported yet.");
+        g.getRaw().removeDoc(doc);        
     }
 
     @Override public void close() {
@@ -147,7 +148,7 @@ public abstract class LuceneFilterSequence<T> implements CloseableSequence<T> {
             closed = true;
         }
     }
-
+    
     @Override public Iterator<T> iterator() {
         return this;
     }

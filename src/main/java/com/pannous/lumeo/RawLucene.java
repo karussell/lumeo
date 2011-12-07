@@ -379,8 +379,10 @@ public class RawLucene {
     // TODO instead of async feeding use a queue or batchBuffer and this thread
     // requirements:
     // - collect objects up to maximum 1000 to call more efficient addDocuments instead of addDocument
-    // - guarantuee order except if id is identical => in this case overwrite (TODO version/optimistic locking)
+    // - guarantee order except if id is identical => in this case overwrite (TODO version/optimistic locking)
+    //   TODO how to guarantee order for different types?
     // - feed listener to watch filters and implement sync e.g. for tests    
+    
     class FlushThread implements Runnable {
 
         @Override public void run() {
@@ -390,18 +392,20 @@ public class RawLucene {
     }
 
     long flush() throws IOException {
-        // group by analyzer + indicate if updating or adding -> add the
+        // TODO LIMIT count per add
+        // TODO UPDATE, ADD, DELETE via nrtManager.updateDocument(term, docs, analyzer);
+//        nrtManager.updateDocuments(new Term, null);
+//        nrtManager.deleteDocuments(terms);
         long currentSearchGeneration = -1;
         for (Entry<String, Map<Long, Document>> docEntries : batchBuffer.entrySet()) {
             Mapping m = getMapping(docEntries.getKey());
-            // TODO LIMIT count per add
-            currentSearchGeneration = nrtManager.addDocuments(docEntries.getValue().values(), 
+            
+            currentSearchGeneration = nrtManager.addDocuments(docEntries.getValue().values(),
                     m.getAnalyzerWrapper());
+            luceneAdds += docEntries.getValue().values().size();
+            docEntries.getValue().clear();
         }
-        // TODO UPDATE nrtManager.updateDocument(term, docs, analyzer);        
-
-        luceneAdds += batchBuffer.values().size();
-        batchBuffer.clear();
+        
         nrtManager.maybeReopen(true);
         if (logger.isInfoEnabled()) {
             long diff = System.currentTimeMillis() - startTime;

@@ -10,11 +10,9 @@ import com.tinkerpop.blueprints.pgm.TransactionalGraph;
 import com.tinkerpop.blueprints.pgm.Vertex;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -97,6 +95,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         }
 
         index = new LuceneAutomaticIndex<T>(this, indexClass, m);
+        index.setIndexName(indexName);
         indices.put(indexClass, index);
         if (Vertex.class.isAssignableFrom(indexClass))
             indices.put(LuceneVertex.class, index);
@@ -109,7 +108,10 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         Index i = indices.get(indexClass);
         if (i == null)
             throw new UnsupportedOperationException("index not found " + indexName + " ," + indexClass);
-
+        
+        if(!indexName.equals(i.getIndexName()))
+            throw new UnsupportedOperationException("index with name " + indexName + " not found");
+        
         return (Index<T>) i;
     }
 

@@ -69,11 +69,11 @@ public class LuceneGraphTest extends SimpleLuceneTestBase {
         seq = index.get("fullname", "peter");
         assertFalse(seq.hasNext());
 
-        // Now do some lucene magic ...        
+        // Now do some lucene magic ...
         v.setProperty("fullname2", "peter something");
         flushAndRefresh();
 
-        // ... and search via StandardAnalyzer!
+        // ... and search via StandardAnalyzer due to ",TEXT"
         seq = index.get("fullname2", "peter");
         assertTrue(seq.hasNext());
         seq.next();

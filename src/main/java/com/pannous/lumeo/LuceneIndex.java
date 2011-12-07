@@ -6,7 +6,6 @@ import com.tinkerpop.blueprints.pgm.Element;
 import com.tinkerpop.blueprints.pgm.Index;
 import com.tinkerpop.blueprints.pgm.Vertex;
 import com.tinkerpop.blueprints.pgm.impls.StringFactory;
-import org.apache.lucene.document.Field;
 import org.apache.lucene.document.Fieldable;
 
 /**
@@ -16,11 +15,13 @@ public class LuceneIndex<T extends Element> implements Index<T> {
 
     private static String UNSUPP_TYPE = "indexClass must be from type Edge or Vertex (or a sublcass)";
     private final Class<T> indexClass;
+    private String name;
     protected final LuceneGraph g;
 
     /** at the moment we have only automatic indices */
     protected LuceneIndex(LuceneGraph graph, Class<T> indexClass) {
         this.indexClass = indexClass;
+        this.name = indexClass.getSimpleName();
         this.g = graph;
 
         if (!Vertex.class.isAssignableFrom(indexClass) && !Edge.class.isAssignableFrom(indexClass))
@@ -36,7 +37,12 @@ public class LuceneIndex<T extends Element> implements Index<T> {
     }
 
     @Override public String getIndexName() {
-        return getIndexClass().getSimpleName();
+        return name;
+    }
+
+    public LuceneIndex<T> setIndexName(String name) {
+        this.name = name;
+        return this;
     }
 
     @Override public CloseableSequence<T> get(final String key, final Object value) {

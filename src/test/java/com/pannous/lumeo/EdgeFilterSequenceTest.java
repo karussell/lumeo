@@ -45,7 +45,7 @@ public class EdgeFilterSequenceTest extends SimpleLuceneTestBase {
     }
 
     @Test public void testIteratorWithVertexFilter() {
-        g.createAutomaticIndex("vertices", Edge.class, Helper.<String>set("hello"));
+        g.createAutomaticIndex("edges", Edge.class, Helper.<String>set("hello"));
         g.createAutomaticIndex("vertices", Vertex.class, Helper.<String>set("hellov"));
         Vertex x1 = g.addVertex("final");        
         Vertex x2 = g.addVertex("countdown");

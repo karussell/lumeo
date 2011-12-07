@@ -15,7 +15,6 @@
  */
 package com.pannous.lumeo;
 
-import com.tinkerpop.blueprints.pgm.CloseableSequence;
 import com.tinkerpop.blueprints.pgm.Vertex;
 import java.util.Iterator;
 import org.apache.lucene.document.Document;
@@ -28,6 +27,7 @@ public class SingleVertexSequence extends VertexFilterSequence {
 
     private boolean hasNext = true;
     private Vertex v;
+    
     public SingleVertexSequence(LuceneGraph g, Vertex v) {
         super(g);
         if (v == null)
@@ -52,7 +52,7 @@ public class SingleVertexSequence extends VertexFilterSequence {
     }
 
     @Override public void remove() {
-        throw new UnsupportedOperationException("Not supported yet.");
+        g.removeVertex(v);
     }
 
     @Override public Iterator<Vertex> iterator() {

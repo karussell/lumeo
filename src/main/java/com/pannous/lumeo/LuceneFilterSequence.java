@@ -40,24 +40,7 @@ import org.apache.lucene.search.TopDocs;
  */
 public abstract class LuceneFilterSequence<T> implements CloseableSequence<T> {
 
-    public static LuceneFilterSequence EMPTY_SEQUENCE = new LuceneFilterSequence() {
-
-        @Override public boolean hasNext() {
-            return false;
-        }
-
-        @Override public Object next() {
-            throw new UnsupportedOperationException("Not supported.");
-        }
-
-        @Override public void close() {
-        }
-
-        @Override
-        protected Object createElement(Document doc) {
-            throw new UnsupportedOperationException("Not supported.");
-        }
-    };
+    private static Term typeTerm = new Term(RawLucene.TYPE);
     protected LuceneGraph g;
     private Filter baseFilter;
     private Filter filter;
@@ -75,7 +58,7 @@ public abstract class LuceneFilterSequence<T> implements CloseableSequence<T> {
     public LuceneFilterSequence(LuceneGraph g, Class<T> type) {
         this.g = g;
         query = new MatchAllDocsQuery();
-        baseFilter = new TermFilter(new Term(RawLucene.TYPE).createTerm(type.getSimpleName()));
+        baseFilter = new TermFilter(typeTerm.createTerm(type.getSimpleName()));
         searcher = g.getRaw().newUnmanagedSearcher();
         mapping = g.getMapping(type.getSimpleName());
     }
@@ -91,10 +74,10 @@ public abstract class LuceneFilterSequence<T> implements CloseableSequence<T> {
         return this;
     }
 
-    public LuceneFilterSequence<T> setValue(String field, Object o) {        
+    public LuceneFilterSequence<T> setValue(String field, Object o) {
         Analyzer a = mapping.getAnalyzer(field);
         if (a == Mapping.KEYWORD_ANALYZER)
-            query = new TermQuery(new Term(field).createTerm(o.toString()));
+            query = new TermQuery(new Term(field, o.toString()));
         else
             try {
                 query = new QueryParser(RawLucene.VERSION, field, a).parse(o.toString());
@@ -104,13 +87,20 @@ public abstract class LuceneFilterSequence<T> implements CloseableSequence<T> {
         return this;
     }
 
+    /**
+     * Convenient method for setFilter
+     */
+    public LuceneFilterSequence<T> setTermFilter(String key, String value) {
+        this.filter = new TermFilter(new Term(key, value));
+        return this;
+    }
+    
     public LuceneFilterSequence<T> setFilter(Filter filter) {
         this.filter = filter;
         return this;
     }
 
-    @Override
-    public boolean hasNext() {
+    @Override public boolean hasNext() {
         if (docs == null) {
             try {
                 if (filter == null)
@@ -132,8 +122,7 @@ public abstract class LuceneFilterSequence<T> implements CloseableSequence<T> {
         return index < docs.scoreDocs.length;
     }
 
-    @Override
-    public T next() {
+    @Override public T next() {
         try {
             if (!hasNext())
                 throw new UnsupportedOperationException("no further element");
@@ -148,21 +137,18 @@ public abstract class LuceneFilterSequence<T> implements CloseableSequence<T> {
         }
     }
 
-    @Override
-    public void remove() {
+    @Override public void remove() {
         throw new UnsupportedOperationException("Not supported yet.");
     }
 
-    @Override
-    public void close() {
+    @Override public void close() {
         if (!closed) {
             g.getRaw().releaseUnmanagedSearcher(searcher);
             closed = true;
         }
     }
 
-    @Override
-    public Iterator<T> iterator() {
+    @Override public Iterator<T> iterator() {
         return this;
     }
 }

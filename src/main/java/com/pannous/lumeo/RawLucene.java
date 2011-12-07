@@ -216,15 +216,11 @@ public class RawLucene {
         return doc;
     }
 
-    void clear() {
-        throw new UnsupportedOperationException("Not yet implemented");
-    }
-
     long count(final String fieldName, final Object value) {
         return searchSomething(new SearchExecutor<Long>() {
 
             @Override public Long execute(IndexSearcher searcher) throws Exception {
-                Term searchTerm = new Term(fieldName).createTerm(toTermString(value));
+                Term searchTerm = new Term(fieldName, toTermString(value));
                 TermDocs td = searcher.getIndexReader().termDocs(searchTerm);
                 try {
                     long c = 0;

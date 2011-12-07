@@ -5,6 +5,7 @@ import com.tinkerpop.blueprints.pgm.Edge;
 import com.tinkerpop.blueprints.pgm.Vertex;
 import com.tinkerpop.blueprints.pgm.impls.StringFactory;
 import org.apache.lucene.document.Document;
+import org.apache.lucene.document.NumericField;
 
 /**
  * @author Peter Karich, info@jetsli.de
@@ -29,11 +30,19 @@ public class LuceneEdge extends LuceneElement implements Edge {
     }
 
     @Override public Vertex getOutVertex() {
-        return g.getOutVertex(this);
+        long id = ((NumericField) getRaw().getFieldable(RawLucene.VERTEX_OUT)).getNumericValue().longValue();
+        Document doc = g.getRaw().findById(id);
+        if (doc == null)
+            throw new NullPointerException("Didn't found out vertex of edge with id " + id);
+        return new LuceneVertex(g, doc);
     }
 
     @Override public Vertex getInVertex() {
-        return g.getInVertex(this);
+        long id = ((NumericField) getRaw().getFieldable(RawLucene.VERTEX_IN)).getNumericValue().longValue();
+        Document doc = g.getRaw().findById(id);
+        if (doc == null)
+            throw new NullPointerException("Didn't found in vertex of edge with id " + id);
+        return new LuceneVertex(g, doc);
     }
 
     @Override public boolean equals(final Object object) {

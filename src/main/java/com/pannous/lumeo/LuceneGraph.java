@@ -11,7 +11,6 @@ import com.tinkerpop.blueprints.pgm.TransactionalGraph;
 import com.tinkerpop.blueprints.pgm.Vertex;
 
 import java.io.IOException;
-import java.net.SocketTimeoutException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -20,7 +19,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.NumericField;
 import org.apache.lucene.store.RAMDirectory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -89,28 +87,10 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
             // DEFAULT type for all keys is normal string!
             Mapping.Type type = Mapping.Type.STRING;
             int pos = k.indexOf(",");
-//            int posUnderscore = k.indexOf("_");
             if (pos >= 0) {
                 type = Mapping.Type.valueOf(k.substring(pos + 1));
                 k = k.substring(0, pos);
             }
-//            else if (posUnderscore >= 0) {
-//                boolean found = true;
-//                String typeStr = k.substring(posUnderscore + 1);
-//                if (typeStr.equals("t"))
-//                    type = Type.TEXT;
-//                else if (typeStr.equals("dt"))
-//                    type = Type.DATE;
-//                else if (typeStr.equals("s"))
-//                    type = Type.STRING;
-//                else if (typeStr.equals("l"))
-//                    type = Type.LONG;
-//                else
-//                    found = false;
-//                
-//                if(found)
-//                    k = k.substring(0, posUnderscore);
-//            }
 
             Type old = m.putField(k, type);
             if (old != null)
@@ -283,17 +263,15 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
     }
 
     @Override public void clear() {
-        try {
-            rawLucene.clear();
-        } catch (Exception e) {
-            throw new RuntimeException(e.getMessage(), e);
-        }
+        throw new UnsupportedOperationException("Not supported yet. (why is this method necessary for transaction support at all??) "
+                + "Recreate the graph or use an in-memory instance.");
     }
 
     @Override public void startTransaction() {
     }
 
     @Override public void stopTransaction(final Conclusion conclusion) {
+        // TODO flush here ?
     }
 
     public RawLucene getRaw() {
@@ -306,22 +284,6 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
 
     long count(String fieldName, Object value) {
         return rawLucene.count(fieldName, value);
-    }
-
-    public Vertex getOutVertex(LuceneEdge e) {
-        long id = ((NumericField) e.getRaw().getFieldable(RawLucene.VERTEX_OUT)).getNumericValue().longValue();
-        Document doc = rawLucene.findById(id);
-        if (doc == null)
-            throw new NullPointerException("Didn't found out vertex of edge with id " + id);
-        return new LuceneVertex(this, doc);
-    }
-
-    public Vertex getInVertex(LuceneEdge e) {
-        long id = ((NumericField) e.getRaw().getFieldable(RawLucene.VERTEX_IN)).getNumericValue().longValue();
-        Document doc = rawLucene.findById(id);
-        if (doc == null)
-            throw new NullPointerException("Didn't found in vertex of edge with id " + id);
-        return new LuceneVertex(this, doc);
     }
 
     void refresh() {

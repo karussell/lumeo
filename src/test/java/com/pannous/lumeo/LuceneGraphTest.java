@@ -15,10 +15,13 @@
  */
 package com.pannous.lumeo;
 
+import com.tinkerpop.blueprints.pgm.Edge;
 import com.pannous.lumeo.util.Helper;
+import com.pannous.lumeo.util.TermFilter;
 import com.tinkerpop.blueprints.pgm.AutomaticIndex;
 import com.tinkerpop.blueprints.pgm.CloseableSequence;
 import com.tinkerpop.blueprints.pgm.Vertex;
+import org.apache.lucene.index.Term;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -83,19 +86,6 @@ public class LuceneGraphTest extends SimpleLuceneTestBase {
         }
     }
 
-    // not sure if we should really introduce this notation, as it is not clear weather
-    // the field name is fullname or fullname_t    
-//    @Test public void testUnderscoreNotation() {        
-//        try {
-//            g.createAutomaticIndex("vertex", Vertex.class, Helper.set("fullname", "fullname_t"));
-//            assertFalse("exception should be raised for multiple key definition", true);
-//        } catch (Exception ex) {
-//        }
-//        g.createAutomaticIndex("vertex", Vertex.class, Helper.set("fullname3"));
-//        seq = index.get("fullname3", "thing");
-//        assertCount(1, seq);
-//    }
-    
     @Test public void testAddAndRemoveVertex() {
         Vertex v = g.addVertex("peter");
         assertNotNull(v);
@@ -112,5 +102,13 @@ public class LuceneGraphTest extends SimpleLuceneTestBase {
         assertNull(g.getVertex("peter"));
 
         assertCount(1, g.getVertices());
+    }
+
+    @Test public void testCreateEdgeAndVertexOfSameUserId() {
+        Vertex v = g.addVertex("peter");
+        Vertex v2 = g.addVertex("peter2");
+        g.addEdge("peter", v, v2, "some label");
+        flushAndRefresh();
+        assertCount(1, new EdgeFilterSequence(g));        
     }
 }

@@ -36,10 +36,10 @@ import org.slf4j.LoggerFactory;
  *
  * @author Peter Karich, info@jetsli.de
  */
-public class Tester {
+public class ReadESIndexViaLucene {
 
     public static void main(String[] args) throws Exception {
-        Logger logger = LoggerFactory.getLogger(Tester.class);
+        Logger logger = LoggerFactory.getLogger(ReadESIndexViaLucene.class);
         IndexWriterConfig cfg = new IndexWriterConfig(Version.LUCENE_34, new StandardAnalyzer(Version.LUCENE_34));
         IndexWriter writer = new IndexWriter(FSDirectory.open(new File("/home/peterk/Dokumente/quell/jetslide/es/data/jetwickcluster/nodes/0/indices/twindex/0/index")),
                 cfg);        

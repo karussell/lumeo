@@ -1,12 +1,13 @@
 das fremde kind -> bibo buch, xyxylönnaeus
 
-check type filtering (e.g. create edge + vertex of same userId!)
+check if all methods are implemented
+
+lucene already has a cache but we need to access documents via ID
 
 make things thread safe. 
    lock access to put - adding an edge is not an atomic access to the map
    delete + put may result in missing or duplicate entries
 
-check if all methods are implemented
 make tests passing
 
 instead of storing -> use only one _source field

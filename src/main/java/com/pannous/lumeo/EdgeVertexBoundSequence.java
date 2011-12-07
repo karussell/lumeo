@@ -29,6 +29,7 @@ import org.apache.lucene.util.NumericUtils;
  */
 public class EdgeVertexBoundSequence extends EdgeFilterSequence {
 
+    private static Term labelTerm = new Term(RawLucene.EDGE_LABEL);
     private final LuceneVertex vertexDoc;
     private final String[] edgeTypes;
     private String[] edgeLabels;
@@ -56,7 +57,7 @@ public class EdgeVertexBoundSequence extends EdgeFilterSequence {
                 if (edgeTypes.length == 1) {
                     String vertexField = RawLucene.getVertexFieldForEdgeType(edgeTypes[0]);
                     String idStr = NumericUtils.longToPrefixCoded((Long) vertexDoc.getId());
-                    edgeFilter.add(new TermFilter(new Term(vertexField).createTerm(idStr)), Occur.MUST);
+                    edgeFilter.add(new TermFilter(new Term(vertexField, idStr)), Occur.MUST);
                 }
                 // no restriction as both types are accepted
             }
@@ -65,7 +66,7 @@ public class EdgeVertexBoundSequence extends EdgeFilterSequence {
             if (edgeLabels != null && edgeLabels.length > 0) {
                 TermsFilter tf = new TermsFilter();
                 for (String label : edgeLabels) {
-                    tf.addTerm(new Term(RawLucene.EDGE_LABEL).createTerm(label));
+                    tf.addTerm(labelTerm.createTerm(label));
                 }
                 edgeFilter.add(tf, Occur.MUST);
             }

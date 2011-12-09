@@ -26,6 +26,7 @@ import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.logging.Level;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.NumericField;
 import org.apache.lucene.index.IndexReader;
@@ -79,6 +80,7 @@ public class RawLucene {
     private long startTime = System.currentTimeMillis();
     private double ramBufferSizeMB = 128;
     private int termIndexIntervalSize = 512;
+    private long maxFlushInterval = 1000L;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
     // id -> indexOp (create, update, delete)    
     // we could group indexop and same type (same analyzer) to make indexing faster
@@ -88,6 +90,7 @@ public class RawLucene {
     private Mapping defaultMapping = new Mapping("_default");
     private String name;
     private boolean closed = false;
+    private FlushThread flushThread;
 
     public RawLucene(String path) {
         try {
@@ -134,6 +137,9 @@ public class RawLucene {
                     // TODO get some random vertices via getVertices?
                 }
             });
+            flushThread = new FlushThread();
+            flushThread.setName("flush");
+            flushThread.start();
             return this;
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -222,6 +228,7 @@ public class RawLucene {
             // writer.rollback();
             writer.close();
             dir.close();
+            flushThread.interrupt();
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -343,6 +350,14 @@ public class RawLucene {
         return successfulLuceneReads;
     }
 
+    public long getMaxFlushInterval() {
+        return maxFlushInterval;
+    }
+
+    public void setMaxFlushInterval(long maxFlushInterval) {
+        this.maxFlushInterval = maxFlushInterval;
+    }
+
     void refresh() {
         try {
             writer.commit();
@@ -373,21 +388,42 @@ public class RawLucene {
     void lockStart() {
         lock.writeLock().lock();
     }
-    
+
     void lockRelease() {
         lock.writeLock().unlock();
     }
 
-    // TODO instead of async feeding use a queue or batchBuffer and this thread
-    // requirements:
-    // - collect objects up to maximum 1000 to call more efficient addDocuments instead of addDocument
-    // - guarantee order except if id is identical => in this case overwrite (TODO version/optimistic locking)
-    //   TODO how to guarantee order for different types?
-    // - feed listener to watch filters and implement sync e.g. for tests    
-    class FlushThread implements Runnable {
+    // TODO add feed listener to every IndexOp?
+    private class FlushThread extends Thread {
 
         @Override public void run() {
+            long start = System.currentTimeMillis();
             while (true) {
+                try {
+                    long newStart = System.currentTimeMillis();
+                    if (batchBuffer.size() > maxNumRecordsBeforeIndexing
+                            || newStart - start > maxFlushInterval) {
+                        start = newStart;
+                        flush();
+                    }
+                } catch (IOException ex) {
+                    logger.error("Problem while flushing", ex);
+                }
+
+                try {
+                    for (int i = 0; i < 100; i++) {
+                        // make sure we do not wait if massive indexing rate
+                        if (batchBuffer.size() > maxNumRecordsBeforeIndexing)
+                            break;
+
+                        Thread.yield();
+                        Thread.sleep(10);
+                    }
+                } catch (InterruptedException ex) {
+                    if (logger.isDebugEnabled())
+                        logger.debug("Flush thread interrupted");
+                    break;
+                }
             }
         }
     }
@@ -402,7 +438,7 @@ public class RawLucene {
                     currentSearchGeneration = nrtManager.addDocument(d, m.getAnalyzerWrapper());
                     break;
                 case UPDATE:
-                    Term t = getIdTerm(getId(d));
+                    Term t = getIdTerm(entry.getKey());
                     m = getMapping(d.get(TYPE));
                     currentSearchGeneration = nrtManager.updateDocument(t, d, m.getAnalyzerWrapper());
                     break;
@@ -418,9 +454,10 @@ public class RawLucene {
         luceneOperations += batchBuffer.size();
         batchBuffer.clear();
         nrtManager.maybeReopen(true);
-        if (logger.isInfoEnabled()) {
+        if (logger.isDebugEnabled()) {
             long diff = System.currentTimeMillis() - startTime;
-            logger.info(diff + "," + failedLuceneReads + "," + successfulLuceneReads + "," + luceneOperations);
+            logger.debug("time to last flush:" + diff / 1000 + ", reads:" + successfulLuceneReads
+                    + ", failed reads:" + failedLuceneReads + ", ops:" + luceneOperations);
         }
 
         failedLuceneReads = 0;
@@ -467,7 +504,9 @@ public class RawLucene {
         Mapping m = mappings.get(type);
         if (m == null) {
             mappings.put(type, m = new Mapping(type));
-            logger.info("Created mapping for type " + type);
+
+            if (logger.isDebugEnabled())
+                logger.debug("Created mapping for type " + type);
         }
         return m;
     }

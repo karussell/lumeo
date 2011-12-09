@@ -12,7 +12,7 @@ improve ID lookup performance
 
 use now our implementation for luxperiment
 
-check if lucene searchers/readers are properly closed
+PROBLEM: if an error is happening while an edge creation => rollback previous changes -> complicated as properties are overwritten too
 
 caching/filtering
     use CachingWrapperFilter

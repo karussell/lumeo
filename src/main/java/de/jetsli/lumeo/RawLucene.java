@@ -16,6 +16,7 @@ package de.jetsli.lumeo;
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import de.jetsli.lumeo.util.IndexOp;
 import de.jetsli.lumeo.util.Mapping;
 import de.jetsli.lumeo.util.SearchExecutor;
 import java.io.File;
@@ -23,6 +24,8 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.NumericField;
 import org.apache.lucene.index.IndexReader;
@@ -61,27 +64,30 @@ public class RawLucene {
     public static final String VERTEX_OUT = "_vout";
     public static final String VERTEX_IN = "_vin";
     public static final Version VERSION = Version.LUCENE_35;
-    // type -> id, doc
-    private Map<String, Map<Long, Document>> batchBuffer = new ConcurrentHashMap<String, Map<Long, Document>>(2);
     private IndexWriter writer;
     private Directory dir;
     private NRTManager nrtManager;
-    private Term uIdTerm = new Term(UID, "");
-    private Term idTerm = new Term(ID, "");
+    private Term uIdTerm = new Term(UID);
+    private Term idTerm = new Term(ID);
     private int bloomFilterSize = 50 * 1024 * 1024;
-    private int maxNumRecordsBeforeIndexing = 500000;
+    private int maxNumRecordsBeforeIndexing = 1000;
     //Avoid Lucene performing "mega merges" with a finite limit on segments sizes that can be merged
     private int maxMergeMB = 3000;
-    private long luceneAdds = 0;
+    private long luceneOperations = 0;
     private long failedLuceneReads = 0;
     private long successfulLuceneReads = 0;
     private long startTime = System.currentTimeMillis();
-    private double ramBufferSizeMB = 300;
+    private double ramBufferSizeMB = 128;
     private int termIndexIntervalSize = 512;
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
+    // id -> indexOp (create, update, delete)    
+    // we could group indexop and same type (same analyzer) to make indexing faster
+    private Map<Long, IndexOp> batchBuffer = new ConcurrentHashMap<Long, IndexOp>(maxNumRecordsBeforeIndexing);
     private Logger logger = LoggerFactory.getLogger(getClass());
     private Map<String, Mapping> mappings = new ConcurrentHashMap<String, Mapping>(2);
     private Mapping defaultMapping = new Mapping("_default");
     private String name;
+    private boolean closed = false;
 
     public RawLucene(String path) {
         try {
@@ -98,7 +104,14 @@ public class RawLucene {
     }
 
     public RawLucene init() {
+        lock.writeLock().lock();
         try {
+            if (closed)
+                throw new IllegalStateException("Already closed");
+
+            if (writer != null)
+                throw new IllegalStateException("Already initialized");
+
             // release locks when started
             if (IndexWriter.isLocked(dir)) {
                 logger.warn("shard is locked, releasing lock");
@@ -124,21 +137,29 @@ public class RawLucene {
             return this;
         } catch (Exception e) {
             throw new RuntimeException(e);
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 
+    Term getIdTerm(long id) {
+        return idTerm.createTerm(NumericUtils.longToPrefixCoded(id));
+    }
+
+    long getId(Document doc) {
+        return ((NumericField) doc.getFieldable(ID)).getNumericValue().longValue();
+    }
+
     public Document findById(final long id) {
-        for (Map<Long, Document> mapBuffer : batchBuffer.values()) {
-            Document result = mapBuffer.get(id);
-            if (result != null)
-                return result;
-        }
+        IndexOp result = batchBuffer.get(id);
+        if (result != null)
+            return result.document;
 
         return searchSomething(new SearchExecutor<Document>() {
 
             @Override public Document execute(IndexSearcher searcher) throws Exception {
                 IndexReader reader = searcher.getIndexReader();
-                Term searchTerm = idTerm.createTerm(NumericUtils.longToPrefixCoded(id));
+                Term searchTerm = getIdTerm(id);
                 TermDocs td = reader.termDocs(searchTerm);
                 if (td.next()) {
                     Document doc = reader.document(td.doc());
@@ -196,7 +217,9 @@ public class RawLucene {
 
     public void close() {
         try {
+            closed = true;
             nrtManager.close();
+            // writer.rollback();
             writer.close();
             dir.close();
         } catch (Exception e) {
@@ -232,12 +255,8 @@ public class RawLucene {
         });
     }
 
-    long removeById(final long id) {
-        try {
-            return nrtManager.deleteDocuments(idTerm.createTerm(NumericUtils.longToPrefixCoded(id)));
-        } catch (IOException ex) {
-            throw new RuntimeException(ex);
-        }
+    void removeById(final long id) {
+        batchBuffer.put(id, new IndexOp(IndexOp.Type.DELETE));
     }
 
     public long fastPut(long id, Document newDoc) {
@@ -246,11 +265,10 @@ public class RawLucene {
             if (type == null)
                 throw new UnsupportedOperationException("Document needs to have a type associated");
 
-            Map<Long, Document> buffer = getBuffer(type);
-            buffer.put(id, newDoc);
-            luceneAdds++;
+            batchBuffer.put(id, new IndexOp(newDoc, IndexOp.Type.UPDATE));
+            luceneOperations++;
             long currentSearchGeneration = nrtManager.getCurrentSearchingGen(true);
-            if (buffer.size() > maxNumRecordsBeforeIndexing)
+            if (batchBuffer.size() > maxNumRecordsBeforeIndexing)
                 currentSearchGeneration = flush();
 
             return currentSearchGeneration;
@@ -271,14 +289,6 @@ public class RawLucene {
             newDoc.add(m.newUIdField(UID, uId));
 
         return fastPut(id, newDoc);
-    }
-
-     <T extends LuceneElement> void update(Document doc) {
-        long id = ((NumericField) doc.getFieldable(ID)).getNumericValue().longValue();
-        // TODO PERFORMANCE should we really check or should we always remove?
-        if (exists(id))
-            removeById(id);
-        fastPut(id, doc);
     }
 
     public double getRamBufferSizeMB() {
@@ -322,7 +332,7 @@ public class RawLucene {
     }
 
     public long getLuceneAdds() {
-        return luceneAdds;
+        return luceneOperations;
     }
 
     public long getFailedLuceneReads() {
@@ -357,8 +367,15 @@ public class RawLucene {
     }
 
     void removeDoc(Document doc) {
-        long id = ((NumericField) doc.getFieldable(ID)).getNumericValue().longValue();
-        removeById(id);
+        removeById(getId(doc));
+    }
+
+    void lockStart() {
+        lock.writeLock().lock();
+    }
+    
+    void lockRelease() {
+        lock.writeLock().unlock();
     }
 
     // TODO instead of async feeding use a queue or batchBuffer and this thread
@@ -367,7 +384,6 @@ public class RawLucene {
     // - guarantee order except if id is identical => in this case overwrite (TODO version/optimistic locking)
     //   TODO how to guarantee order for different types?
     // - feed listener to watch filters and implement sync e.g. for tests    
-    
     class FlushThread implements Runnable {
 
         @Override public void run() {
@@ -377,28 +393,38 @@ public class RawLucene {
     }
 
     long flush() throws IOException {
-        // TODO LIMIT count per add
-        // TODO UPDATE, ADD, DELETE via nrtManager.updateDocument(term, docs, analyzer);
-//        nrtManager.updateDocuments(new Term, null);
-//        nrtManager.deleteDocuments(terms);
         long currentSearchGeneration = -1;
-        for (Entry<String, Map<Long, Document>> docEntries : batchBuffer.entrySet()) {
-            Mapping m = getMapping(docEntries.getKey());
-            
-            currentSearchGeneration = nrtManager.addDocuments(docEntries.getValue().values(),
-                    m.getAnalyzerWrapper());
-            luceneAdds += docEntries.getValue().values().size();
-            docEntries.getValue().clear();
+        for (Entry<Long, IndexOp> entry : batchBuffer.entrySet()) {
+            Document d = entry.getValue().document;
+            switch (entry.getValue().type) {
+                case CREATE:
+                    Mapping m = getMapping(d.get(TYPE));
+                    currentSearchGeneration = nrtManager.addDocument(d, m.getAnalyzerWrapper());
+                    break;
+                case UPDATE:
+                    Term t = getIdTerm(getId(d));
+                    m = getMapping(d.get(TYPE));
+                    currentSearchGeneration = nrtManager.updateDocument(t, d, m.getAnalyzerWrapper());
+                    break;
+                case DELETE:
+                    t = getIdTerm(entry.getKey());
+                    currentSearchGeneration = nrtManager.deleteDocuments(t);
+                    break;
+                default:
+                    throw new UnsupportedOperationException("type " + entry.getValue().type + " is not allowed");
+
+            }
         }
-        
+        luceneOperations += batchBuffer.size();
+        batchBuffer.clear();
         nrtManager.maybeReopen(true);
         if (logger.isInfoEnabled()) {
             long diff = System.currentTimeMillis() - startTime;
-            logger.info(diff + "," + failedLuceneReads + "," + successfulLuceneReads + "," + luceneAdds);
+            logger.info(diff + "," + failedLuceneReads + "," + successfulLuceneReads + "," + luceneOperations);
         }
 
         failedLuceneReads = 0;
-        luceneAdds = 0;
+        luceneOperations = 0;
         successfulLuceneReads = 0;
         startTime = System.currentTimeMillis();
         return currentSearchGeneration;
@@ -409,12 +435,12 @@ public class RawLucene {
     }
 
     void initRelation(Document edgeDoc, Document vOut, Document vIn) {
-        long oIndex = ((NumericField) vOut.getFieldable(ID)).getNumericValue().longValue();
+        long oIndex = getId(vOut);
         edgeDoc.add(defaultMapping.newIdField(VERTEX_OUT, oIndex));
-        long iIndex = ((NumericField) vIn.getFieldable(ID)).getNumericValue().longValue();
+        long iIndex = getId(vIn);
         edgeDoc.add(defaultMapping.newIdField(VERTEX_IN, iIndex));
 
-        long eId = ((NumericField) edgeDoc.getFieldable(ID)).getNumericValue().longValue();
+        long eId = getId(edgeDoc);
         vOut.add(defaultMapping.newIdField(EDGE_OUT, eId));
         vIn.add(defaultMapping.newIdField(EDGE_IN, eId));
 
@@ -435,20 +461,14 @@ public class RawLucene {
      * @return never null. Automatically creates a mapping if it does not exist.
      */
     public Mapping getMapping(String type) {
+        if (type == null)
+            throw new NullPointerException("Type shouldn't be empty!");
+
         Mapping m = mappings.get(type);
         if (m == null) {
             mappings.put(type, m = new Mapping(type));
             logger.info("Created mapping for type " + type);
         }
         return m;
-    }
-
-    Map<Long, Document> getBuffer(String type) {
-        Map<Long, Document> docs = batchBuffer.get(type);
-        if (docs == null) {
-            docs = new ConcurrentHashMap<Long, Document>();
-            batchBuffer.put(type, docs);
-        }
-        return docs;
     }
 }

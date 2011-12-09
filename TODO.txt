@@ -1,30 +1,24 @@
-das fremde kind -> bibo buch, xyxylönnaeus
+use blueprint tests to see what fails
 
-1. make things thread safe. 
-   implement atomic UPDATE
-   think about order + semi transaction support
-   lock access to put - adding an edge is not an atomic access to the map
-   delete + put may result in missing or duplicate entries
-
-2. improve ID lookup performance
+improve ID lookup performance
    lucene already has a cache but we need to access documents via ID
-    improve ID lookup via LUCENE 4.0 see http://blog.mikemccandless.com/2010/06/lucenes-pulsingcodec-on-primary-key.html
-        indexWriterConfig.setCodecProvider()
-   faster field fetching via doc values
-      http://www.searchworkings.org/blog/-/blogs/introducing-lucene-index-doc-values
-      http://www.slideshare.net/lucenerevolution/willnauer-simon-doc-values-column-stride-fields-in-lucene
-   use OpenBitSet bloomFilter
+   know what we do not have via OpenBitSet bloomFilter
+   LUCENE 4.0
+      improve ID lookup http://blog.mikemccandless.com/2010/06/lucenes-pulsingcodec-on-primary-key.html
+         indexWriterConfig.setCodecProvider()
+      faster field fetching via doc values
+         http://www.searchworkings.org/blog/-/blogs/introducing-lucene-index-doc-values
+         http://www.slideshare.net/lucenerevolution/willnauer-simon-doc-values-column-stride-fields-in-lucene   
 
-3. use blueprint tests to see what fails
-
+use now our implementation for luxperiment
 
 check if lucene searchers/readers are properly closed
 
-use CachingWrapperFilter
+caching/filtering
+    use CachingWrapperFilter
+    use FilteredDocIdSet to better traverse a prefiltered graph
 
 instead of storing -> use only one _source field
-
-use FilteredDocIdSet to better traverse a prefiltered graph
 
 remove difference of edge and vertex in/out ? 
     this or something else would be necessary if we introduce shortcut from vertex to vertex

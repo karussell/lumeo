@@ -43,17 +43,17 @@ public class RawLuceneTest extends SimpleLuceneTestBase {
     @Test public void testCount() {
         RawLucene rl = g.getRaw();
 
-        Document doc = rl.createDocument("tmp", 1, Tmp.class);
+        Document doc = rl.createDocument("tmp1", 1, Tmp.class);
         doc.add(m.newLongField("xy", 12L));
         doc.add(m.newStringField("name", "peter"));
         rl.put("idSomething", 1, doc);
 
-        doc = rl.createDocument("tmp", 1, Tmp.class);
-        doc.add(m.newIdField("xy", 1L));
+        doc = rl.createDocument("tmp2", 2, Tmp.class);
+        doc.add(m.newLongField("xy", 1L));
         doc.add(m.newStringField("name", "peter"));
         rl.put("idSomething2", 2, doc);
 
-        doc = rl.createDocument("tmp", 1, Tmp.class);
+        doc = rl.createDocument("tmp3", 3, Tmp.class);
         doc.add(m.newStringField("name", "peter 2"));
         rl.put("idSomething3", 3, doc);
 
@@ -85,7 +85,7 @@ public class RawLuceneTest extends SimpleLuceneTestBase {
 
         doc = rl.createDocument("myId", id, Tmp.class);
         doc.add(m.newStringField("name", "different"));
-        rl.update(doc);
+        rl.put("myId", id, doc);
         flushAndRefresh();
         doc = rl.searchSomething(new SearchExecutor<Document>() {
 

@@ -154,7 +154,7 @@ public class Mapping {
     }
 
     @Override public String toString() {
-        return type + " - mapping:" + fieldToTypeMapping;
+        return type + ", fields:" + fieldToTypeMapping;
     }
 
     public String toTermString(Object o) {

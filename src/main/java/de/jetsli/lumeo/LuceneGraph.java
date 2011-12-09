@@ -196,16 +196,21 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
             }
 
             Document edgeDoc = rawLucene.findByUserId(userId.toString());
-            if (edgeDoc == null) {
-                if (id < 0)
-                    id = atomicCounter.incrementAndGet();
+            rawLucene.lockStart();
+            try {
+                if (edgeDoc == null) {
+                    if (id < 0)
+                        id = atomicCounter.incrementAndGet();
 
-                edgeDoc = rawLucene.createDocument(userId, id, Edge.class);
-                edgeDoc.add(getMapping(Edge.class.getSimpleName()).newStringField(RawLucene.EDGE_LABEL, label));
+                    edgeDoc = rawLucene.createDocument(userId, id, Edge.class);
+                    edgeDoc.add(getMapping(Edge.class.getSimpleName()).newStringField(RawLucene.EDGE_LABEL, label));
+                }
+
+                rawLucene.initRelation(edgeDoc, ((LuceneElement) outVertex).getRaw(), ((LuceneElement) inVertex).getRaw());
+                rawLucene.put(userId, id, edgeDoc);
+            } finally {
+                rawLucene.lockRelease();
             }
-
-            rawLucene.initRelation(edgeDoc, ((LuceneElement) outVertex).getRaw(), ((LuceneElement) inVertex).getRaw());
-            rawLucene.put(userId, id, edgeDoc);
             return new LuceneEdge(this, edgeDoc);
         } catch (RuntimeException e) {
             throw e;
@@ -233,7 +238,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
     @Override public void removeEdge(final Edge edge) {
         rawLucene.removeById((Long) edge.getId());
     }
-        
+
     @Override public void removeVertex(final Vertex vertex) {
         rawLucene.removeById((Long) vertex.getId());
     }
@@ -272,7 +277,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
     }
 
     @Override public void stopTransaction(final Conclusion conclusion) {
-        // TODO flush here ?
+        // TODO flush here or use lock of RawLucene?
     }
 
     public RawLucene getRaw() {

@@ -42,14 +42,20 @@ import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.util.NumericUtils;
-import org.apache.lucene.util.OpenBitSet;
 import org.apache.lucene.util.Version;
-import org.codehaus.jackson.map.util.LRUMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Uses a buffer to accumulate uncommitted state. Should stay independent of Blueprints API.
+ * Uses a buffer to accumulate uncommitted state. Should stay independent of Blueprints API.  
+ * 
+ * Minor impressions taken from
+ * http://code.google.com/p/graphdb-load-tester/source/browse/trunk/src/com/tinkerpop/graph/benchmark/index/LuceneKeyToNodeIdIndexImpl.java
+ * 
+ * -> still use batchBuffer to improve performance of get (realtime get) and to later support versioning
+ * -> use near real time reader, no need for commit 
+ * -> no bloomfilter then it is 1 sec (>10%) faster for testIndexing and less memory usage
+ *    TODO check if traversal benchmark is also faster
  * 
  * @author Peter Karich, info@jetsli.de
  */
@@ -71,8 +77,7 @@ public class RawLucene {
     private Directory dir;
     private NRTManager nrtManager;
     private Term uIdTerm = new Term(UID);
-    private Term idTerm = new Term(ID);
-    private int bloomFilterSize = 50 * 1024 * 1024;
+    private Term idTerm = new Term(ID);    
     private int maxNumRecordsBeforeIndexing = 1000;
     //Avoid Lucene performing "mega merges" with a finite limit on segments sizes that can be merged
     private int maxMergeMB = 3000;
@@ -88,8 +93,7 @@ public class RawLucene {
     private final Object bufferFullLock = new Object();
     // id -> indexOp (create, update, delete)    
     // we could group indexop and same type (same analyzer) to make indexing faster
-    private Map<Long, IndexOp> batchBuffer = new ConcurrentHashMap<Long, IndexOp>(maxNumRecordsBeforeIndexing);
-    private OpenBitSet userIdBloom = new OpenBitSet(10000);
+    private Map<Long, IndexOp> batchBuffer = new ConcurrentHashMap<Long, IndexOp>(maxNumRecordsBeforeIndexing);    
     private Logger logger = LoggerFactory.getLogger(getClass());
     private Map<String, Mapping> mappings = new ConcurrentHashMap<String, Mapping>(2);
     private Mapping defaultMapping = new Mapping("_default");
@@ -186,9 +190,6 @@ public class RawLucene {
     }
 
     public Document findByUserId(final String uId) {
-        if (!userIdBloom.get(uId.hashCode()))
-            return null;
-
         return searchSomething(new SearchExecutor<Document>() {
 
             @Override public Document execute(IndexSearcher searcher) throws Exception {
@@ -300,7 +301,6 @@ public class RawLucene {
 
             IndexOp op = new IndexOp(newDoc, IndexOp.Type.UPDATE);
             batchBuffer.put(id, op);
-            userIdBloom.set(newDoc.get(UID).hashCode());
             long currentSearchGeneration = nrtManager.getCurrentSearchingGen(true);
 //            if (batchBuffer.size() > maxNumRecordsBeforeIndexing)
 //                currentSearchGeneration = flush();
@@ -551,14 +551,6 @@ public class RawLucene {
 
     public void setTermIndexIntervalSize(int termIndexIntervalSize) {
         this.termIndexIntervalSize = termIndexIntervalSize;
-    }
-
-    public int getBloomFilterSize() {
-        return bloomFilterSize;
-    }
-
-    public void setBloomFilterSize(int bloomFilterSize) {
-        this.bloomFilterSize = bloomFilterSize;
     }
 
     public int getMaxNumRecordsBeforeCommit() {

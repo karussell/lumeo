@@ -1,3 +1,15 @@
+write test for multiple flush accessing threads
+lock multiple access to flush!!
+
+
+protect changing dir of rawLucene
+    => indexRWLock
+protect batchBuffer
+    => ??
+block if batchBuffer is full
+    => bufferLock
+
+
 use blueprint tests to see what fails
 
 improve ID lookup performance

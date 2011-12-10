@@ -112,7 +112,7 @@ public class Mapping {
     }
 
     public Fieldable newLongField(String name, long id) {
-        NumericField idField = new NumericField(name, 4, store, true).setLongValue(id);
+        NumericField idField = new NumericField(name, 6, store, true).setLongValue(id);
         idField.setIndexOptions(IndexOptions.DOCS_ONLY);
         return idField;
     }

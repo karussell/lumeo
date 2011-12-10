@@ -17,6 +17,7 @@ package de.jetsli.lumeo.util;
 
 import com.tinkerpop.blueprints.pgm.CloseableSequence;
 import com.tinkerpop.blueprints.pgm.Edge;
+import java.io.File;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -62,5 +63,15 @@ public class Helper {
             set.add(s);
         }
         return set;
+    }
+
+    public static void deleteDir(File file) {
+        if (file.isDirectory()) {
+            for (File f : file.listFiles()) {
+                deleteDir(f);
+            }
+        }
+
+        file.delete();
     }
 }

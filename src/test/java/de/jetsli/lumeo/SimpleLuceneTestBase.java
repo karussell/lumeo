@@ -18,6 +18,7 @@ package de.jetsli.lumeo;
 import java.io.File;
 import org.slf4j.Logger;
 import com.tinkerpop.blueprints.pgm.CloseableSequence;
+import de.jetsli.lumeo.util.Helper;
 import org.junit.After;
 import org.junit.Before;
 import org.slf4j.LoggerFactory;
@@ -47,7 +48,7 @@ public class SimpleLuceneTestBase {
 
     protected void reinitFileBasedGraph() {
         g.shutdown();
-        new File("test-lumeo").delete();
+        Helper.deleteDir(new File("test-lumeo"));
         g = new LuceneGraph("test-lumeo");
     }
 

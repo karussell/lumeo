@@ -196,7 +196,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
             }
 
             Document edgeDoc = rawLucene.findByUserId(userId.toString());
-            rawLucene.lockStart();
+            rawLucene.indexLock();
             try {
                 if (edgeDoc == null) {
                     if (id < 0)
@@ -209,7 +209,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
                 rawLucene.initRelation(edgeDoc, ((LuceneElement) outVertex).getRaw(), ((LuceneElement) inVertex).getRaw());
                 rawLucene.put(userId, id, edgeDoc);
             } finally {
-                rawLucene.lockRelease();
+                rawLucene.indexUnlock();
             }
             return new LuceneEdge(this, edgeDoc);
         } catch (RuntimeException e) {

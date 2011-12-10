@@ -16,13 +16,12 @@
 package de.jetsli.lumeo.perf;
 
 import com.tinkerpop.blueprints.pgm.Vertex;
-import de.jetsli.lumeo.LuceneGraph;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.Test;
+import static org.junit.Assert.*;
 import de.jetsli.lumeo.SimpleLuceneTestBase;
 import de.jetsli.lumeo.util.StopWatch;
-import java.io.File;
 import java.util.Random;
 
 /**
@@ -33,7 +32,8 @@ public class PerformanceIntegrationTesting extends SimpleLuceneTestBase {
 
     List<Vertex> previousVertices;
     Random rand;
-    int TRIALS = 10;
+    int TRIALS = 5;
+    String exception;
 
     @Override
     public void setUp() {
@@ -42,24 +42,57 @@ public class PerformanceIntegrationTesting extends SimpleLuceneTestBase {
         rand = new Random(1);
     }
 
+    // no concurrent access to flush allowed => otherwise NPE in clearAttributes or exception in NumericUtil
+//    @Test public void testConcurrentFlush() {
+//        exception = null;
+//        int threadCount = 2;
+//        Thread[] threads = new Thread[threadCount];
+//        for (int i = 0; i < threadCount; i++) {
+//            for (int j = 0; j < 1000; j++) {
+//                connect(i);
+//            }
+//            threads[i] = new Thread() {
+//
+//                @Override public void run() {
+//                    try {
+//                        g.flush();
+//                    } catch(Exception ex) {
+//                        exception = ex.getMessage();
+//                    }
+//                }
+//            };
+//            threads[i].start();
+//        }
+//        for (int i = 0; i < threads.length; i++) {
+//            try {
+//                threads[i].join();
+//            } catch (InterruptedException ex) {
+//                throw new RuntimeException(ex);
+//            }
+//        }
+//        assertFalse("Exception occured:" + exception, exception != null);
+//    }
+    
     @Test public void testIndexing() {
-        logger.info("starting");
+        logger.info("warming jvm");
         reinitFileBasedGraph();
-        // until 50k => warming jvm
         for (int i = 0; i < 50000; i++) {
             connect(i);
         }
+        logger.info("starting benchmark");
         float allSecs = 0;
-        for (int trial = 0; trial < TRIALS; trial++) {            
+        for (int trial = 0; trial < TRIALS; trial++) {
             reinitFileBasedGraph();
             StopWatch sw = new StopWatch("perf" + trial).start();
             for (int i = 0; i < 100000; i++) {
                 connect(i);
             }
             logger.info(sw.stop().toString());
-            allSecs = sw.getSeconds();
+            allSecs += sw.getSeconds();
         }
-        logger.info("finished " + allSecs / TRIALS);
+        float res = allSecs / TRIALS;
+        logger.info("finished benchmark with " + res);
+        assertTrue("mean of benchmark should be less than 15 seconds but was " + res, res < 15f);
     }
 
     private void connect(int i) {

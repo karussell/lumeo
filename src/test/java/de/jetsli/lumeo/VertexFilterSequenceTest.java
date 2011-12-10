@@ -32,6 +32,6 @@ public class VertexFilterSequenceTest {
     }
     
     @Test public void testSearchAfter() {
-        // important to test!
+        // TODO test!
     }
 }

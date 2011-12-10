@@ -15,7 +15,6 @@
  */
 package de.jetsli.lumeo;
 
-import de.jetsli.lumeo.RawLucene;
 import de.jetsli.lumeo.util.Mapping;
 import de.jetsli.lumeo.util.SearchExecutor;
 import org.apache.lucene.document.Document;

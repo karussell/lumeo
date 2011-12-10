@@ -15,10 +15,6 @@
  */
 package de.jetsli.lumeo;
 
-import de.jetsli.lumeo.RawLucene;
-import de.jetsli.lumeo.EdgeVertexBoundSequence;
-import de.jetsli.lumeo.LuceneVertex;
-import com.tinkerpop.blueprints.pgm.CloseableSequence;
 import com.tinkerpop.blueprints.pgm.Edge;
 import com.tinkerpop.blueprints.pgm.Vertex;
 import org.junit.Test;

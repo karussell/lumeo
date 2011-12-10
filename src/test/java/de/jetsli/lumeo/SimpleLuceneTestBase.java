@@ -15,10 +15,12 @@
  */
 package de.jetsli.lumeo;
 
-import java.util.Iterator;
+import java.io.File;
+import org.slf4j.Logger;
 import com.tinkerpop.blueprints.pgm.CloseableSequence;
 import org.junit.After;
 import org.junit.Before;
+import org.slf4j.LoggerFactory;
 import static org.junit.Assert.*;
 
 /**
@@ -27,7 +29,8 @@ import static org.junit.Assert.*;
  */
 public class SimpleLuceneTestBase {
 
-    LuceneGraph g;
+    protected Logger logger = LoggerFactory.getLogger(SimpleLuceneTestBase.class);
+    protected LuceneGraph g;
 
     @Before public void setUp() {
         g = new LuceneGraph();
@@ -40,6 +43,12 @@ public class SimpleLuceneTestBase {
     protected void flushAndRefresh() {
         g.flush();
         g.refresh();
+    }
+
+    protected void reinitFileBasedGraph() {
+        g.shutdown();
+        new File("test-lumeo").delete();
+        g = new LuceneGraph("test-lumeo");
     }
 
     public void assertCount(int exp, CloseableSequence seq) {

@@ -26,7 +26,6 @@ import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.logging.Level;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.NumericField;
 import org.apache.lucene.index.IndexReader;
@@ -39,6 +38,7 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.NRTManager;
 import org.apache.lucene.search.SearcherManager;
 import org.apache.lucene.search.SearcherWarmer;
+import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.util.NumericUtils;
@@ -117,7 +117,7 @@ public class RawLucene {
 
             // release locks when started
             if (IndexWriter.isLocked(dir)) {
-                logger.warn("shard is locked, releasing lock");
+                logger.warn("index is locked + " + name + " -> releasing lock");
                 IndexWriter.unlock(dir);
             }
             IndexWriterConfig cfg = new IndexWriterConfig(VERSION, defaultMapping.getAnalyzerWrapper());
@@ -137,8 +137,7 @@ public class RawLucene {
                     // TODO get some random vertices via getVertices?
                 }
             });
-            flushThread = new FlushThread();
-            flushThread.setName("flush");
+            flushThread = new FlushThread("flush-thread");            
             flushThread.start();
             return this;
         } catch (Exception e) {
@@ -223,6 +222,8 @@ public class RawLucene {
 
     public void close() {
         try {
+            //? flush();
+            logger.debug("RawLucene.close");
             closed = true;
             nrtManager.close();
             // writer.rollback();
@@ -272,11 +273,19 @@ public class RawLucene {
             if (type == null)
                 throw new UnsupportedOperationException("Document needs to have a type associated");
 
+            // it is important to let the indexing thread do its work
+            if (batchBuffer.size() > 2 * maxNumRecordsBeforeIndexing) {
+                synchronized (batchBuffer) {
+                    long start = System.currentTimeMillis();
+                    batchBuffer.wait();
+                    // logger.info("block due to too many entries " + (System.currentTimeMillis() - start) / 1000f);
+                }
+            }
+
             batchBuffer.put(id, new IndexOp(newDoc, IndexOp.Type.UPDATE));
-            luceneOperations++;
             long currentSearchGeneration = nrtManager.getCurrentSearchingGen(true);
-            if (batchBuffer.size() > maxNumRecordsBeforeIndexing)
-                currentSearchGeneration = flush();
+//            if (batchBuffer.size() > maxNumRecordsBeforeIndexing)
+//                currentSearchGeneration = flush();
 
             return currentSearchGeneration;
         } catch (Exception ex) {
@@ -296,6 +305,170 @@ public class RawLucene {
             newDoc.add(m.newUIdField(UID, uId));
 
         return fastPut(id, newDoc);
+    }
+
+    void refresh() {
+        try {
+            writer.commit();
+        } catch (Exception ex) {
+            throw new RuntimeException();
+        }
+    }
+
+    /** You'll need to call releaseUnmanagedSearcher afterwards */
+    IndexSearcher newUnmanagedSearcher() {
+        SearcherManager sm = nrtManager.getSearcherManager(true);
+        return sm.acquire();
+    }
+
+    void releaseUnmanagedSearcher(IndexSearcher searcher) {
+        // TODO: is it ok to avoid calling the searchmanager?
+        try {
+            searcher.getIndexReader().decRef();
+        } catch (IOException ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    void removeDoc(Document doc) {
+        removeById(getId(doc));
+    }
+
+    void lockStart() {
+        lock.writeLock().lock();
+    }
+
+    void lockRelease() {
+        lock.writeLock().unlock();
+    }
+
+    @Override public String toString() {
+        return name;
+    }
+
+    void initRelation(Document edgeDoc, Document vOut, Document vIn) {
+        long oIndex = getId(vOut);
+        edgeDoc.add(defaultMapping.newIdField(VERTEX_OUT, oIndex));
+        long iIndex = getId(vIn);
+        edgeDoc.add(defaultMapping.newIdField(VERTEX_IN, iIndex));
+
+        long eId = getId(edgeDoc);
+        vOut.add(defaultMapping.newIdField(EDGE_OUT, eId));
+        vIn.add(defaultMapping.newIdField(EDGE_IN, eId));
+
+        fastPut(oIndex, vOut);
+        fastPut(iIndex, vIn);
+    }
+
+    static String getVertexFieldForEdgeType(String edgeType) {
+        if (EDGE_IN.equals(edgeType))
+            return VERTEX_IN;
+        else if (EDGE_OUT.equals(edgeType))
+            return VERTEX_OUT;
+        else
+            throw new UnsupportedOperationException("Edge type not supported:" + edgeType);
+    }
+
+    /**
+     * @return never null. Automatically creates a mapping if it does not exist.
+     */
+    public Mapping getMapping(String type) {
+        if (type == null)
+            throw new NullPointerException("Type shouldn't be empty!");
+
+        Mapping m = mappings.get(type);
+        if (m == null) {
+            mappings.put(type, m = new Mapping(type));
+
+            if (logger.isDebugEnabled())
+                logger.debug("Created mapping for type " + type);
+        }
+        return m;
+    }
+
+    long flush() throws IOException {
+        long currentSearchGeneration = -1;
+        for (Entry<Long, IndexOp> entry : batchBuffer.entrySet()) {
+            Document d = entry.getValue().document;
+            switch (entry.getValue().type) {
+                case CREATE:
+                    Mapping m = getMapping(d.get(TYPE));
+                    currentSearchGeneration = nrtManager.addDocument(d, m.getAnalyzerWrapper());
+                    break;
+                case UPDATE:
+                    Term t = getIdTerm(entry.getKey());
+                    m = getMapping(d.get(TYPE));
+                    currentSearchGeneration = nrtManager.updateDocument(t, d, m.getAnalyzerWrapper());
+                    break;
+                case DELETE:
+                    t = getIdTerm(entry.getKey());
+                    currentSearchGeneration = nrtManager.deleteDocuments(t);
+                    break;
+                default:
+                    throw new UnsupportedOperationException("type " + entry.getValue().type + " is not allowed");
+            }
+        }
+
+        luceneOperations += batchBuffer.size();
+        if (logger.isDebugEnabled()) {
+            long diff = System.currentTimeMillis() - startTime;
+            logger.debug("time to last flush:" + diff / 1000f
+                    + ", reads:" + successfulLuceneReads + ", failed reads:" + failedLuceneReads
+                    + ", current ops " + batchBuffer.size() + ", all ops:" + luceneOperations);
+        }
+
+        batchBuffer.clear();
+        nrtManager.maybeReopen(true);
+        failedLuceneReads = 0;
+        successfulLuceneReads = 0;
+        startTime = System.currentTimeMillis();
+
+        synchronized (batchBuffer) {
+            batchBuffer.notifyAll();
+        }
+        return currentSearchGeneration;
+    }
+
+    // TODO add feed listener to every IndexOp?
+    private class FlushThread extends Thread {
+
+        public FlushThread(String name) {
+            super(name);
+        }
+        
+        @Override public void run() {
+            logger.info(getName() + " started");
+            long start = System.currentTimeMillis();
+            while (!isInterrupted()) {
+                try {
+                    long newStart = System.currentTimeMillis();
+                    if (batchBuffer.size() > maxNumRecordsBeforeIndexing
+                            || newStart - start > maxFlushInterval) {
+                        start = newStart;
+                        flush();
+                    }
+                } catch (AlreadyClosedException ex) {
+                    logger.error(getName() + " interrupted, " + ex.getMessage() + " buffer:" + batchBuffer.size());
+                    break;
+                } catch (Exception ex) {
+                    logger.error("Problem while flushing", ex);
+                }
+
+                try {
+                    for (int i = 0; i < 50; i++) {
+                        // make sure we do not wait if massive indexing rate
+                        if (batchBuffer.size() > maxNumRecordsBeforeIndexing)
+                            break;
+
+                        Thread.sleep(10);
+                    }
+                } catch (InterruptedException ex) {
+                    if (logger.isDebugEnabled())
+                        logger.debug(getName() + " interrupted while sleeping, " + ex.getMessage());
+                    break;
+                }
+            }
+        }
     }
 
     public double getRamBufferSizeMB() {
@@ -356,158 +529,5 @@ public class RawLucene {
 
     public void setMaxFlushInterval(long maxFlushInterval) {
         this.maxFlushInterval = maxFlushInterval;
-    }
-
-    void refresh() {
-        try {
-            writer.commit();
-        } catch (Exception ex) {
-            throw new RuntimeException();
-        }
-    }
-
-    /** You'll need to call releaseUnmanagedSearcher afterwards */
-    IndexSearcher newUnmanagedSearcher() {
-        SearcherManager sm = nrtManager.getSearcherManager(true);
-        return sm.acquire();
-    }
-
-    void releaseUnmanagedSearcher(IndexSearcher searcher) {
-        // TODO: is it ok to avoid calling the searchmanager?
-        try {
-            searcher.getIndexReader().decRef();
-        } catch (IOException ex) {
-            throw new RuntimeException(ex);
-        }
-    }
-
-    void removeDoc(Document doc) {
-        removeById(getId(doc));
-    }
-
-    void lockStart() {
-        lock.writeLock().lock();
-    }
-
-    void lockRelease() {
-        lock.writeLock().unlock();
-    }
-
-    // TODO add feed listener to every IndexOp?
-    private class FlushThread extends Thread {
-
-        @Override public void run() {
-            long start = System.currentTimeMillis();
-            while (true) {
-                try {
-                    long newStart = System.currentTimeMillis();
-                    if (batchBuffer.size() > maxNumRecordsBeforeIndexing
-                            || newStart - start > maxFlushInterval) {
-                        start = newStart;
-                        flush();
-                    }
-                } catch (IOException ex) {
-                    logger.error("Problem while flushing", ex);
-                }
-
-                try {
-                    for (int i = 0; i < 100; i++) {
-                        // make sure we do not wait if massive indexing rate
-                        if (batchBuffer.size() > maxNumRecordsBeforeIndexing)
-                            break;
-
-                        Thread.yield();
-                        Thread.sleep(10);
-                    }
-                } catch (InterruptedException ex) {
-                    if (logger.isDebugEnabled())
-                        logger.debug("Flush thread interrupted");
-                    break;
-                }
-            }
-        }
-    }
-
-    long flush() throws IOException {
-        long currentSearchGeneration = -1;
-        for (Entry<Long, IndexOp> entry : batchBuffer.entrySet()) {
-            Document d = entry.getValue().document;
-            switch (entry.getValue().type) {
-                case CREATE:
-                    Mapping m = getMapping(d.get(TYPE));
-                    currentSearchGeneration = nrtManager.addDocument(d, m.getAnalyzerWrapper());
-                    break;
-                case UPDATE:
-                    Term t = getIdTerm(entry.getKey());
-                    m = getMapping(d.get(TYPE));
-                    currentSearchGeneration = nrtManager.updateDocument(t, d, m.getAnalyzerWrapper());
-                    break;
-                case DELETE:
-                    t = getIdTerm(entry.getKey());
-                    currentSearchGeneration = nrtManager.deleteDocuments(t);
-                    break;
-                default:
-                    throw new UnsupportedOperationException("type " + entry.getValue().type + " is not allowed");
-
-            }
-        }
-        luceneOperations += batchBuffer.size();
-        batchBuffer.clear();
-        nrtManager.maybeReopen(true);
-        if (logger.isDebugEnabled()) {
-            long diff = System.currentTimeMillis() - startTime;
-            logger.debug("time to last flush:" + diff / 1000 + ", reads:" + successfulLuceneReads
-                    + ", failed reads:" + failedLuceneReads + ", ops:" + luceneOperations);
-        }
-
-        failedLuceneReads = 0;
-        luceneOperations = 0;
-        successfulLuceneReads = 0;
-        startTime = System.currentTimeMillis();
-        return currentSearchGeneration;
-    }
-
-    @Override public String toString() {
-        return name;
-    }
-
-    void initRelation(Document edgeDoc, Document vOut, Document vIn) {
-        long oIndex = getId(vOut);
-        edgeDoc.add(defaultMapping.newIdField(VERTEX_OUT, oIndex));
-        long iIndex = getId(vIn);
-        edgeDoc.add(defaultMapping.newIdField(VERTEX_IN, iIndex));
-
-        long eId = getId(edgeDoc);
-        vOut.add(defaultMapping.newIdField(EDGE_OUT, eId));
-        vIn.add(defaultMapping.newIdField(EDGE_IN, eId));
-
-        fastPut(oIndex, vOut);
-        fastPut(iIndex, vIn);
-    }
-
-    static String getVertexFieldForEdgeType(String edgeType) {
-        if (EDGE_IN.equals(edgeType))
-            return VERTEX_IN;
-        else if (EDGE_OUT.equals(edgeType))
-            return VERTEX_OUT;
-        else
-            throw new UnsupportedOperationException("Edge type not supported:" + edgeType);
-    }
-
-    /**
-     * @return never null. Automatically creates a mapping if it does not exist.
-     */
-    public Mapping getMapping(String type) {
-        if (type == null)
-            throw new NullPointerException("Type shouldn't be empty!");
-
-        Mapping m = mappings.get(type);
-        if (m == null) {
-            mappings.put(type, m = new Mapping(type));
-
-            if (logger.isDebugEnabled())
-                logger.debug("Created mapping for type " + type);
-        }
-        return m;
     }
 }

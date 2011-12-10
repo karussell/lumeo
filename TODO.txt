@@ -12,6 +12,8 @@ block if batchBuffer is full
 
 use blueprint tests to see what fails
 
+have a look into http://kasparov.skife.org/lucene/graph/
+
 improve ID lookup performance
    lucene already has a cache but we need to access documents via ID
    know what we do not have via OpenBitSet bloomFilter

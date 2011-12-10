@@ -328,6 +328,7 @@ public class RawLucene {
     void refresh() {
         try {
             writer.commit();
+            nrtManager.maybeReopen(true);
         } catch (Exception ex) {
             throw new RuntimeException();
         }

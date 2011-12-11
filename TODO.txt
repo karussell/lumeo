@@ -1,16 +1,14 @@
-write test for multiple flush accessing threads
-lock multiple access to flush!!
+check again lock mechanism
+    => avoid wait + notifyAll (replace with different mechism -> yield?) => faster indexing
 
+java.util.ConcurrentModificationException
+	at java.util.AbstractList$Itr.checkForComodification(AbstractList.java:372)
+	at java.util.AbstractList$Itr.next(AbstractList.java:343)
+	at org.apache.lucene.document.Document.get(Document.java:167)
+	at de.jetsli.lumeo.RawLucene.flush(RawLucene.java:429)
+	at de.jetsli.lumeo.RawLucene$FlushThread.run(RawLucene.java:506)
 
-protect changing dir of rawLucene
-    => indexRWLock
-protect batchBuffer
-    => ??
-block if batchBuffer is full
-    => bufferLock
-
-
-use blueprint tests to see what fails
+make blueprint tests running
 
 have a look into http://kasparov.skife.org/lucene/graph/
 

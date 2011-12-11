@@ -22,7 +22,7 @@ improve ID lookup performance
          http://www.searchworkings.org/blog/-/blogs/introducing-lucene-index-doc-values
          http://www.slideshare.net/lucenerevolution/willnauer-simon-doc-values-column-stride-fields-in-lucene   
 
-use now our implementation for luxperiment
+use lumeo for luxperiment
 
 PROBLEM: if an error is happening while an edge creation => rollback previous changes -> complicated as properties are overwritten too
 

@@ -42,19 +42,19 @@ public class RawLuceneTest extends SimpleLuceneTestBase {
     @Test public void testCount() {
         RawLucene rl = g.getRaw();
 
-        Document doc = rl.createDocument("tmp1", 1, Tmp.class);
+        Document doc = rl.createDocument("tmp1", Tmp.class);
         doc.add(m.newLongField("xy", 12L));
         doc.add(m.newStringField("name", "peter"));
-        rl.put("idSomething", 1, doc);
+        rl.put("idSomething", doc);
 
-        doc = rl.createDocument("tmp2", 2, Tmp.class);
+        doc = rl.createDocument("tmp2", Tmp.class);
         doc.add(m.newLongField("xy", 1L));
         doc.add(m.newStringField("name", "peter"));
-        rl.put("idSomething2", 2, doc);
+        rl.put("idSomething2", doc);
 
-        doc = rl.createDocument("tmp3", 3, Tmp.class);
+        doc = rl.createDocument("tmp3", Tmp.class);
         doc.add(m.newStringField("name", "peter 2"));
-        rl.put("idSomething3", 3, doc);
+        rl.put("idSomething3", doc);
 
         flushAndRefresh();
         assertEquals(1, rl.count("xy", 12L));
@@ -63,10 +63,9 @@ public class RawLuceneTest extends SimpleLuceneTestBase {
 
     @Test public void testUpdateDoc() {
         RawLucene rl = g.getRaw();
-        long id = 1;
-        Document doc = rl.createDocument("myId", id, Tmp.class);
+        Document doc = rl.createDocument("myId", Tmp.class);
         doc.add(m.newStringField("name", "peter"));
-        rl.put("myId", id, doc);
+        rl.put("myId", doc);
         flushAndRefresh();
         doc = rl.searchSomething(new SearchExecutor<Document>() {
 
@@ -82,9 +81,9 @@ public class RawLuceneTest extends SimpleLuceneTestBase {
         });
         assertEquals("peter", doc.get("name"));
 
-        doc = rl.createDocument("myId", id, Tmp.class);
+        doc = rl.createDocument("myId",  Tmp.class);
         doc.add(m.newStringField("name", "different"));
-        rl.put("myId", id, doc);
+        rl.put("myId", doc);
         flushAndRefresh();
         doc = rl.searchSomething(new SearchExecutor<Document>() {
 

@@ -5,13 +5,12 @@ import com.tinkerpop.blueprints.pgm.Edge;
 import com.tinkerpop.blueprints.pgm.Vertex;
 import com.tinkerpop.blueprints.pgm.impls.StringFactory;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.NumericField;
 
 /**
  * @author Peter Karich, info@jetsli.de
  */
 public class LuceneEdge extends LuceneElement implements Edge {
-
+    
     public LuceneEdge(LuceneGraph graph, Document doc) {
         this(graph, doc, false);
     }
@@ -30,19 +29,19 @@ public class LuceneEdge extends LuceneElement implements Edge {
     }
 
     @Override public Vertex getOutVertex() {
-        long id = ((NumericField) getRaw().getFieldable(RawLucene.VERTEX_OUT)).getNumericValue().longValue();
-        Document doc = g.getRaw().findById(id);
-        if (doc == null)
-            throw new NullPointerException("Didn't found out vertex of edge with id " + id);
-        return new LuceneVertex(g, doc);
+        String uId = getRaw().get(RawLucene.VERTEX_OUT);
+        Vertex v = g.getVertex(uId);
+        if (v == null)
+            throw new NullPointerException("Didn't found OUT vertex of edge with id " + uId);
+        return v;
     }
 
     @Override public Vertex getInVertex() {
-        long id = ((NumericField) getRaw().getFieldable(RawLucene.VERTEX_IN)).getNumericValue().longValue();
-        Document doc = g.getRaw().findById(id);
-        if (doc == null)
-            throw new NullPointerException("Didn't found in vertex of edge with id " + id);
-        return new LuceneVertex(g, doc);
+        String uId = getRaw().get(RawLucene.VERTEX_IN);
+        Vertex v = g.getVertex(uId);
+        if (v == null)
+            throw new NullPointerException("Didn't found IN vertex of edge with id " + uId);
+        return v;
     }
 
     @Override public boolean equals(final Object object) {

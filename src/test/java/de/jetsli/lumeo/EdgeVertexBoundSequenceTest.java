@@ -50,7 +50,7 @@ public class EdgeVertexBoundSequenceTest extends SimpleLuceneTestBase {
         Edge e = eSeq.next();
         assertEquals("twitteraccount", e.getLabel());
         assertNotNull(e.getId());
-        assertTrue("id should of type long", e.getId() instanceof Long);
+        assertTrue("id should of type String", e.getId() instanceof String);
         assertTrue(eSeq.hasNext());
         eSeq.next();
         assertFalse(eSeq.hasNext());

@@ -10,7 +10,6 @@ import java.util.Set;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Fieldable;
-import org.apache.lucene.document.NumericField;
 
 /**
  * @author Peter Karich, info@jetsli.de
@@ -34,7 +33,7 @@ public abstract class LuceneElement implements Element {
     }
 
     @Override public void setProperty(final String key, final Object value) {
-        if (key.equals(RawLucene.ID) || key.equals(RawLucene.TYPE)
+        if (key.equals(RawLucene.UID) || key.equals(RawLucene.TYPE)
                 || (this instanceof Edge && key.equals(RawLucene.EDGE_LABEL)))
             throw new RuntimeException(key + StringFactory.PROPERTY_EXCEPTION_MESSAGE);
 
@@ -80,7 +79,7 @@ public abstract class LuceneElement implements Element {
     }
 
     @Override public Object getId() {
-        return ((NumericField) rawElement.getFieldable(RawLucene.ID)).getNumericValue().longValue();
+        return rawElement.get(RawLucene.UID);
     }
 
     public String getType() {

@@ -32,7 +32,7 @@ public class PerformanceIntegrationTesting extends SimpleLuceneTestBase {
 
     List<Vertex> previousVertices;
     Random rand;
-    int TRIALS = 5;
+    int TRIALS = 10;
     String exception;
 
     @Override

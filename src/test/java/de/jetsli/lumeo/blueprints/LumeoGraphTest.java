@@ -34,7 +34,7 @@ public class LumeoGraphTest extends GraphTest {
         this.supportsEdgeIteration = true;
         this.supportsVertexIndex = true;
         this.supportsEdgeIndex = true;
-        this.ignoresSuppliedIds = false;
+        this.ignoresSuppliedIds = true;
         this.supportsTransactions = false;
     }
 

@@ -63,7 +63,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
     }
 
     public LuceneGraph(String path) {
-        this(new RawLucene(path).init());
+        this(new RawLucene(path).init());        
     }
 
     public LuceneGraph(RawLucene rl) {
@@ -142,14 +142,9 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
 
     @Override public Vertex addVertex(Object userIdObj) {
         try {
-            long userId;
-            if (userIdObj == null) {
-                userId = atomicCounter.incrementAndGet();
-            } else {
-                userId = (Long) userIdObj;
-                if (rawLucene.exists(userId))
-                    throw new RuntimeException("Vertex with user id already exists:" + userId);
-            }
+            long userId = atomicCounter.incrementAndGet();
+            if (rawLucene.exists(userId))
+                throw new RuntimeException("Vertex with user id already exists:" + userId);
 
             Document doc = rawLucene.findById(userId);
             if (doc == null) {
@@ -183,14 +178,9 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
 
     @Override public Edge addEdge(final Object userIdObj, final Vertex outVertex, final Vertex inVertex, final String label) {
         try {
-            long userId;
-            if (userIdObj == null) {
-                userId = atomicCounter.incrementAndGet();
-            } else {
-                userId = (Long) userIdObj;
-                if (rawLucene.exists(userId))
-                    throw new RuntimeException("Edge with user id already exists:" + userId);
-            }
+            long userId = atomicCounter.incrementAndGet();
+            if (rawLucene.exists(userId))
+                throw new RuntimeException("Edge with user id already exists:" + userId);
 
             Document edgeDoc = rawLucene.findById(userId);
             rawLucene.indexLock();
@@ -263,8 +253,8 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
     }
 
     @Override public void clear() {
-        throw new UnsupportedOperationException("Not supported yet. (why is this method necessary for transaction support at all??) "
-                + "Recreate the graph or use an in-memory instance.");
+//        throw new UnsupportedOperationException("Not supported yet. (why is this method necessary for transaction support at all??) "
+//                + "Recreate the graph or use an in-memory instance.");
     }
 
     @Override public void startTransaction() {

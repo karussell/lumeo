@@ -27,16 +27,16 @@ import static org.junit.Assert.*;
 public class EdgeVertexBoundSequenceTest extends SimpleLuceneTestBase {
 
     @Test public void testSequence() {
-        Vertex v1 = g.addVertex("peter");
-        Vertex v2 = g.addVertex("timetabling");
-        g.addEdge("idEdge", v1, v2, "twitteraccount");
+        Vertex v1 = g.addVertex(1L);
+        Vertex v2 = g.addVertex(2L);
+        g.addEdge(3L, v1, v2, "twitteraccount");
         flushAndRefresh();
 
         EdgeVertexBoundSequence eSeq = new EdgeVertexBoundSequence(g, (LuceneVertex) v1, RawLucene.EDGE_IN);
         assertCount(0, eSeq);
 
-        Vertex v3 = g.addVertex("jetslideapp");
-        g.addEdge("idEdge2", v3, v1, "twitteraccounting");
+        Vertex v3 = g.addVertex(5L);
+        g.addEdge(4L, v3, v1, "twitteraccounting");
         flushAndRefresh();
 
         eSeq = new EdgeVertexBoundSequence(g, (LuceneVertex) v1, RawLucene.EDGE_IN);
@@ -57,12 +57,12 @@ public class EdgeVertexBoundSequenceTest extends SimpleLuceneTestBase {
     }
 
     @Test public void testSequenceWithLabels() {
-        Vertex v1 = g.addVertex("peter");
-        Vertex v2 = g.addVertex("timetabling");
-        g.addEdge("idEdge", v1, v2, "twitteraccount");
+        Vertex v1 = g.addVertex(1L);
+        Vertex v2 = g.addVertex(2L);
+        g.addEdge(3L, v1, v2, "twitteraccount");
 
-        Vertex v3 = g.addVertex("jetslideapp");
-        g.addEdge("idEdge2", v3, v1, "twitteraccounting");
+        Vertex v3 = g.addVertex(5L);
+        g.addEdge(4L, v3, v1, "twitteraccounting");
         flushAndRefresh();
 
         EdgeVertexBoundSequence eSeq = new EdgeVertexBoundSequence(g, (LuceneVertex) v1, RawLucene.EDGE_IN).setLabels("twitteraccounting");

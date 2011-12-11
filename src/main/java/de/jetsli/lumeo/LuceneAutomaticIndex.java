@@ -36,13 +36,13 @@ public class LuceneAutomaticIndex<T extends Element> extends LuceneIndex<T> impl
             removeField(key, element);
 
         putField(m.createField(key, newValue), element);
-        g.getRaw().fastPut((String) element.getId(), ((LuceneElement) element).getRaw());
+        g.getRaw().fastPut((Long) element.getId(), ((LuceneElement) element).getRaw());
     }
 
     protected void autoRemove(final String key, final Object oldValue, final T element) {
         // accept all keys to remove stored
         removeField(key, element);
-        g.getRaw().fastPut((String) element.getId(), ((LuceneElement) element).getRaw());
+        g.getRaw().fastPut((Long) element.getId(), ((LuceneElement) element).getRaw());
     }
 
     @Override public CloseableSequence<T> get(final String key, final Object value) {

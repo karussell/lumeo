@@ -142,16 +142,16 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
 
     @Override public Vertex addVertex(Object userIdObj) {
         try {
-            String userId;
+            long userId;
             if (userIdObj == null) {
-                userId = combine(vType, Long.toString(atomicCounter.incrementAndGet()));
+                userId = atomicCounter.incrementAndGet();
             } else {
-                userId = combine(vType, userIdObj.toString());
+                userId = (Long) userIdObj;
                 if (rawLucene.exists(userId))
                     throw new RuntimeException("Vertex with user id already exists:" + userId);
             }
 
-            Document doc = rawLucene.findByUserId(userId.toString());
+            Document doc = rawLucene.findById(userId);
             if (doc == null) {
                 doc = rawLucene.createDocument(userId, Vertex.class);
                 rawLucene.put(userId, doc);
@@ -166,7 +166,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
     }
 
     @Override public Vertex getVertex(final Object id) {
-        Document doc = rawLucene.findByUserId(combine(vType, id.toString()));
+        Document doc = rawLucene.findById((Long) id);
         if (doc == null)
             return null;
 
@@ -183,16 +183,16 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
 
     @Override public Edge addEdge(final Object userIdObj, final Vertex outVertex, final Vertex inVertex, final String label) {
         try {
-            String userId;
+            long userId;
             if (userIdObj == null) {
-                userId = combine(eType, Long.toString(atomicCounter.incrementAndGet()));
+                userId = atomicCounter.incrementAndGet();
             } else {
-                userId = combine(eType, userIdObj.toString());
+                userId = (Long) userIdObj;
                 if (rawLucene.exists(userId))
                     throw new RuntimeException("Edge with user id already exists:" + userId);
             }
 
-            Document edgeDoc = rawLucene.findByUserId(userId.toString());
+            Document edgeDoc = rawLucene.findById(userId);
             rawLucene.indexLock();
             try {
                 if (edgeDoc == null) {
@@ -222,7 +222,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
     }
 
     @Override public Edge getEdge(final Object id) {
-        Document doc = rawLucene.findByUserId(combine(eType, id.toString()));
+        Document doc = rawLucene.findById((Long) id);
         if (doc == null)
             return null;
 
@@ -230,11 +230,11 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
     }
 
     @Override public void removeEdge(final Edge edge) {
-        rawLucene.removeById((String) edge.getId());
+        rawLucene.removeById((Long) edge.getId());
     }
 
     @Override public void removeVertex(final Vertex vertex) {
-        rawLucene.removeById((String) vertex.getId());
+        rawLucene.removeById((Long) vertex.getId());
     }
 
      <T extends Element> Collection<LuceneAutomaticIndex<T>> getAutoIndices(Class<T> cl) {

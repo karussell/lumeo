@@ -8,6 +8,12 @@ java.util.ConcurrentModificationException
 	at de.jetsli.lumeo.RawLucene.flush(RawLucene.java:429)
 	at de.jetsli.lumeo.RawLucene$FlushThread.run(RawLucene.java:506)
 
+when using a long id for the 'real id' then lookup is faster
+    but we cannot offer (without additional ram costs) real time get
+
+clear buffer not directly after feeding -> but after reopening searcher -> how?
+  -> see ES -> refreshVersionTable
+
 make blueprint tests running
 
 have a look into http://kasparov.skife.org/lucene/graph/

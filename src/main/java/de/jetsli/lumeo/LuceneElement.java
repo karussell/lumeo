@@ -33,7 +33,7 @@ public abstract class LuceneElement implements Element {
     }
 
     @Override public void setProperty(final String key, final Object value) {
-        if (key.equals(RawLucene.UID) || key.equals(RawLucene.TYPE)
+        if (key.equals(RawLucene.ID) || key.equals(RawLucene.TYPE)
                 || (this instanceof Edge && key.equals(RawLucene.EDGE_LABEL)))
             throw new RuntimeException(key + StringFactory.PROPERTY_EXCEPTION_MESSAGE);
 
@@ -79,7 +79,7 @@ public abstract class LuceneElement implements Element {
     }
 
     @Override public Object getId() {
-        return rawElement.get(RawLucene.UID);
+        return g.getRaw().getId(rawElement);
     }
 
     public String getType() {

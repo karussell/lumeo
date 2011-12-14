@@ -15,6 +15,7 @@
  */
 package de.jetsli.lumeo;
 
+import de.jetsli.lumeo.util.KeywordAnalyzerLowerCase;
 import de.jetsli.lumeo.util.TermFilter;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.BooleanClause.Occur;
@@ -56,7 +57,7 @@ public class EdgeVertexBoundSequence extends EdgeFilterSequence {
             if (edgeTypes != null) {
                 if (edgeTypes.length == 1) {
                     String vertexField = RawLucene.getVertexFieldForEdgeType(edgeTypes[0]);
-                    String idStr = NumericUtils.longToPrefixCoded((Long) vertexDoc.getId());
+                    String idStr = NumericUtils.longToPrefixCoded((Long) vertexDoc.getId());                    
                     edgeFilter.add(new TermFilter(new Term(vertexField, idStr)), Occur.MUST);
                 }
                 // no restriction as both types are accepted
@@ -66,7 +67,7 @@ public class EdgeVertexBoundSequence extends EdgeFilterSequence {
             if (edgeLabels != null && edgeLabels.length > 0) {
                 TermsFilter tf = new TermsFilter();
                 for (String label : edgeLabels) {
-                    tf.addTerm(labelTerm.createTerm(label));
+                    tf.addTerm(labelTerm.createTerm(KeywordAnalyzerLowerCase.transform(label)));
                 }
                 edgeFilter.add(tf, Occur.MUST);
             }

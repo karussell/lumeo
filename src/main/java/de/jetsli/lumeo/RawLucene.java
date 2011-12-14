@@ -255,7 +255,7 @@ public class RawLucene {
     public Document createDocument(String uId, long id, Class cl) {
         Document doc = new Document();
         Mapping m = getMapping(cl.getSimpleName());
-        doc.add(m.newStringField(RawLucene.TYPE, cl.getSimpleName()));
+        doc.add(m.createField(RawLucene.TYPE, cl.getSimpleName()));
         doc.add(m.newUIdField(UID, uId));
         doc.add(m.newIdField(ID, id));
         return doc;
@@ -265,7 +265,7 @@ public class RawLucene {
         return searchSomething(new SearchExecutor<Long>() {
 
             @Override public Long execute(IndexSearcher searcher) throws Exception {
-                Term searchTerm = new Term(fieldName, defaultMapping.toTermString(value));
+                Term searchTerm = defaultMapping.toTerm(fieldName, value);
                 TermDocs td = searcher.getIndexReader().termDocs(searchTerm);
                 try {
                     long c = 0;
@@ -482,7 +482,7 @@ public class RawLucene {
                 }
             }
 
-//            logger.error(getName() + " interrupted, " + exception == null ? "" : exception.getMessage());
+            logger.debug(getName() + " interrupted, " + exception == null ? "" : exception.getMessage());
         }
     }
 

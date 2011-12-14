@@ -17,6 +17,7 @@ package de.jetsli.lumeo;
 
 import com.tinkerpop.blueprints.pgm.Edge;
 import com.tinkerpop.blueprints.pgm.Vertex;
+import de.jetsli.lumeo.util.Helper;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -73,5 +74,29 @@ public class EdgeVertexBoundSequenceTest extends SimpleLuceneTestBase {
 
         eSeq = new EdgeVertexBoundSequence(g, (LuceneVertex) v1).setLabels("twitteraccounting");
         assertCount(1, eSeq);
+    }
+    
+    @Test public void testCaseInsensitive() {
+        g.createAutomaticIndex("tmp", Edge.class, Helper.set("name"));
+        Vertex v1 = g.addVertex("peter");
+        Vertex v2 = g.addVertex("timetabling");
+        Edge e1 = g.addEdge("idEdge", v1, v2, "twitteraccount");
+        e1.setProperty("name", "World");
+
+        Vertex v3 = g.addVertex("jetslideapp");
+        Edge e2 = g.addEdge("idEdge2", v3, v1, "twitteraccounting");
+        e2.setProperty("name", "hellO");
+        flushAndRefresh();
+
+        LuceneFilterSequence<Edge> eSeq = new EdgeVertexBoundSequence(g, (LuceneVertex) v1, 
+                RawLucene.EDGE_IN).setValue("name", "Hello");
+        assertCount(1, eSeq);
+
+        eSeq = new EdgeVertexBoundSequence(g, (LuceneVertex) v1).setValue("name", "worlD");
+        assertCount(1, eSeq);              
+        
+        // no stemming per default only lower case
+        eSeq = new EdgeVertexBoundSequence(g, (LuceneVertex) v1).setValue("name", "worlds");
+        assertCount(0, eSeq);
     }
 }

@@ -49,7 +49,7 @@ public final class LumeoPerFieldAnalyzer extends Analyzer {
      * @param fieldName field name requiring a non-default analyzer
      * @param analyzer non-default analyzer to use for field     
      */
-    public void addAnalyzer(String fieldName, Analyzer analyzer) {
+    public void putAnalyzer(String fieldName, Analyzer analyzer) {
         analyzerMap.put(fieldName, analyzer);
     }
 

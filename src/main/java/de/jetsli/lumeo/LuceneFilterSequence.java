@@ -18,6 +18,7 @@ package de.jetsli.lumeo;
 import de.jetsli.lumeo.util.Mapping;
 import de.jetsli.lumeo.util.TermFilter;
 import com.tinkerpop.blueprints.pgm.CloseableSequence;
+import de.jetsli.lumeo.util.KeywordAnalyzerLowerCase;
 import java.io.IOException;
 import java.util.Iterator;
 import org.apache.lucene.analysis.Analyzer;
@@ -40,7 +41,6 @@ import org.apache.lucene.search.TopDocs;
  */
 public abstract class LuceneFilterSequence<T> implements CloseableSequence<T> {
 
-    private static Term typeTerm = new Term(RawLucene.TYPE);
     protected LuceneGraph g;
     private Filter baseFilter;
     private Filter filter;
@@ -53,15 +53,12 @@ public abstract class LuceneFilterSequence<T> implements CloseableSequence<T> {
     private boolean closed = false;
     private Document doc;
 
-    private LuceneFilterSequence() {
-    }
-
     public LuceneFilterSequence(LuceneGraph g, Class<T> type) {
         this.g = g;
-        query = new MatchAllDocsQuery();
-        baseFilter = new TermFilter(typeTerm.createTerm(type.getSimpleName()));
+        query = new MatchAllDocsQuery();        
         searcher = g.getRaw().newUnmanagedSearcher();
         mapping = g.getMapping(type.getSimpleName());
+        baseFilter = new TermFilter(mapping.toTerm(RawLucene.TYPE, type.getSimpleName()));
     }
 
     public Filter getBaseFilter() {
@@ -75,24 +72,8 @@ public abstract class LuceneFilterSequence<T> implements CloseableSequence<T> {
         return this;
     }
 
-    public LuceneFilterSequence<T> setValue(String field, Object o) {
-        Analyzer a = mapping.getAnalyzer(field);
-        if (a == Mapping.KEYWORD_ANALYZER_LC)
-            query = new TermQuery(new Term(field, o.toString()));
-        else
-            try {
-                query = new QueryParser(RawLucene.VERSION, field, a).parse(o.toString());
-            } catch (ParseException ex) {
-                throw new RuntimeException(ex);
-            }
-        return this;
-    }
-
-    /**
-     * Convenient method for setFilter
-     */
-    public LuceneFilterSequence<T> setTermFilter(String key, String value) {
-        this.filter = new TermFilter(new Term(key, value));
+    public LuceneFilterSequence<T> setValue(String field, Object o) {        
+        query = mapping.getQuery(field, o);        
         return this;
     }
     

@@ -34,27 +34,28 @@ public class RawLuceneTest extends SimpleLuceneTestBase {
     
     @Override public void setUp() {
         super.setUp();
-        m = new Mapping("_default");
+        m = new Mapping(Tmp.class.getSimpleName());
+        m.putField("xy", Mapping.Type.LONG);
+        m.putField("name", Mapping.Type.STRING);
     }
     
     class Tmp {
     }
 
     @Test public void testCount() {
-        RawLucene rl = g.getRaw();
-
+        RawLucene rl = g.getRaw();        
         Document doc = rl.createDocument("tmp1", 1, Tmp.class);
-        doc.add(m.newLongField("xy", 12L));
-        doc.add(m.newStringField("name", "peter"));
+        doc.add(m.createField("xy", 12L));
+        doc.add(m.createField("name", "peter"));
         rl.put("idSomething", 1, doc);
 
         doc = rl.createDocument("tmp2", 2, Tmp.class);
-        doc.add(m.newLongField("xy", 1L));
-        doc.add(m.newStringField("name", "peter"));
+        doc.add(m.createField("xy", 1L));
+        doc.add(m.createField("name", "peter"));
         rl.put("idSomething2", 2, doc);
 
         doc = rl.createDocument("tmp3", 3, Tmp.class);
-        doc.add(m.newStringField("name", "peter 2"));
+        doc.add(m.createField("name", "peter 2"));
         rl.put("idSomething3", 3, doc);
 
         flushAndRefresh();
@@ -66,7 +67,7 @@ public class RawLuceneTest extends SimpleLuceneTestBase {
         RawLucene rl = g.getRaw();
         long id = 1;
         Document doc = rl.createDocument("myId", id, Tmp.class);
-        doc.add(m.newStringField("name", "peter"));
+        doc.add(m.createField("name", "peter"));
         rl.put("myId", id, doc);
         flushAndRefresh();
         doc = rl.searchSomething(new SearchExecutor<Document>() {
@@ -84,7 +85,7 @@ public class RawLuceneTest extends SimpleLuceneTestBase {
         assertEquals("peter", doc.get("name"));
 
         doc = rl.createDocument("myId", id, Tmp.class);
-        doc.add(m.newStringField("name", "different"));
+        doc.add(m.createField("name", "different"));
         rl.put("myId", id, doc);
         flushAndRefresh();
         doc = rl.searchSomething(new SearchExecutor<Document>() {
@@ -106,7 +107,7 @@ public class RawLuceneTest extends SimpleLuceneTestBase {
         RawLucene rl = g.getRaw();
         long id = 1;
         Document doc = rl.createDocument("myId", id, Tmp.class);
-        doc.add(m.newStringField("name", "peter"));
+        doc.add(m.createField("name", "peter"));
         rl.put("myId", id, doc);
         assertNotNull(rl.findById(id));
         rl.flush();

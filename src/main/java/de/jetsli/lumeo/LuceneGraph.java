@@ -85,8 +85,8 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
 
         Mapping m = getMapping(indexClass.getSimpleName());
         for (String k : keys) {
-            // DEFAULT type for all keys is normal string!
-            Mapping.Type type = Mapping.Type.STRING;
+            // DEFAULT type for all keys is normal string and to lower case!
+            Mapping.Type type = m.getDefaultType();
             int pos = k.indexOf(",");
             if (pos >= 0) {
                 type = Mapping.Type.valueOf(k.substring(pos + 1));
@@ -95,7 +95,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
 
             Type old = m.putField(k, type);
             if (old != null)
-                throw new UnsupportedOperationException("Property was defined multiple times! new:" + k + " old:" + old);
+                throw new UnsupportedOperationException("Property was already defined! new:" + k + " old:" + old);
         }
 
         index = new LuceneAutomaticIndex<T>(this, indexClass, m);
@@ -201,7 +201,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
                         id = atomicCounter.incrementAndGet();
 
                     edgeDoc = rawLucene.createDocument(userId, id, Edge.class);
-                    edgeDoc.add(getMapping(Edge.class.getSimpleName()).newStringField(RawLucene.EDGE_LABEL, label));
+                    edgeDoc.add(getMapping(Edge.class.getSimpleName()).createField(RawLucene.EDGE_LABEL, label));
                 }
 
                 rawLucene.initRelation(edgeDoc, ((LuceneElement) outVertex).getRaw(), ((LuceneElement) inVertex).getRaw());

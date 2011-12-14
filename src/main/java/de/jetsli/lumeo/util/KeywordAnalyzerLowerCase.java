@@ -42,4 +42,8 @@ public class KeywordAnalyzerLowerCase extends ReusableAnalyzerBase {
         TokenStream stream = new LowerCaseFilter(version, tokenizer);
         return new TokenStreamComponents(tokenizer, stream);
     }
+    
+    public static String transform(String str) {
+        return str.toLowerCase();
+    }
 }

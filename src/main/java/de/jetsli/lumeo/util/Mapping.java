@@ -29,6 +29,11 @@ import org.apache.lucene.document.Field;
 import org.apache.lucene.document.Fieldable;
 import org.apache.lucene.document.NumericField;
 import org.apache.lucene.index.FieldInfo.IndexOptions;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.queryParser.ParseException;
+import org.apache.lucene.queryParser.QueryParser;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.util.NumericUtils;
 
 /**
@@ -45,17 +50,35 @@ public class Mapping {
 
     public enum Type {
 
-        DATE, LONG, STRING, TEXT
+        DATE, LONG, DOUBLE, STRING, STRING_LC, TEXT
     }
     // store all fields per default 
     // TODO use _source
     private Field.Store store = Field.Store.YES;
-    private Map<String, Type> fieldToTypeMapping = new LinkedHashMap<String, Type>();
-    private LumeoPerFieldAnalyzer analyzer = new LumeoPerFieldAnalyzer(KEYWORD_ANALYZER_LC);
+    private final Map<String, Type> fieldToTypeMapping;
+    private final LumeoPerFieldAnalyzer analyzer;
     private String type;
 
     public Mapping(String type) {
         this.type = type;
+        analyzer = new LumeoPerFieldAnalyzer(getDefaultAnalyzer());
+        fieldToTypeMapping = new LinkedHashMap<String, Type>(4);
+        //putField(RawLucene.ID, Type.LONG);
+        putField(RawLucene.UID, Type.STRING);
+        putField(RawLucene.TYPE, Type.STRING);
+        putField(RawLucene.EDGE_LABEL, Type.STRING);
+    }
+
+    public Mapping(Class cl) {
+        this(cl.getSimpleName());
+    }
+
+    public Type getDefaultType() {
+        return Type.STRING_LC;
+    }
+
+    public Analyzer getDefaultAnalyzer() {
+        return KEYWORD_ANALYZER_LC;
     }
 
     /** @return true if no previous type was overwritten */
@@ -63,14 +86,22 @@ public class Mapping {
         Type oldType = fieldToTypeMapping.put(key, type);
         switch (type) {
             case TEXT:
-                analyzer.addAnalyzer(key, STANDARD_ANALYZER);
+                analyzer.putAnalyzer(key, STANDARD_ANALYZER);
+                break;
+            case STRING_LC:
+                analyzer.putAnalyzer(key, KEYWORD_ANALYZER_LC);
                 break;
             case DATE:
+                analyzer.putAnalyzer(key, KEYWORD_ANALYZER);
+                break;
             case STRING:
+                analyzer.putAnalyzer(key, KEYWORD_ANALYZER);
+                break;
+            case DOUBLE:
+                analyzer.putAnalyzer(key, KEYWORD_ANALYZER);
+                break;
             case LONG:
-                if (getAnalyzer(key) != KEYWORD_ANALYZER_LC)
-                    throw new IllegalStateException("Internal Problem: Mapping Analyzer "
-                            + getAnalyzer(key) + " does not match type " + Type.STRING);
+                analyzer.putAnalyzer(key, KEYWORD_ANALYZER);
                 break;
             default:
                 throw new IllegalStateException("something went wrong while determing analyzer for type " + type);
@@ -93,11 +124,17 @@ public class Mapping {
             case DATE:
                 return newDateField(key, ((Date) value).getTime());
             case STRING:
-                if (getAnalyzer(key) == KEYWORD_ANALYZER_LC)
+                if (getAnalyzer(key) == KEYWORD_ANALYZER)
                     return newStringField(key, (String) value);
                 else
                     throw new IllegalStateException("Internal Problem: Mapping Analyzer "
                             + getAnalyzer(key) + " does not match type " + Type.STRING);
+            case STRING_LC:
+                if (getAnalyzer(key) == KEYWORD_ANALYZER_LC)
+                    return newStringField(key, KeywordAnalyzerLowerCase.transform((String) value));
+                else
+                    throw new IllegalStateException("Internal Problem: Mapping Analyzer "
+                            + getAnalyzer(key) + " does not match type " + Type.STRING_LC);
             case TEXT:
                 return newAnalyzedStringField(key, (String) value);
             case LONG:
@@ -131,13 +168,13 @@ public class Mapping {
     }
 
     /** Necessary for keywordanalyzer */
-    public Fieldable newStringField(String name, String val) {
+    Fieldable newStringField(String name, String val) {
         Field field = new Field(name, val, store, Field.Index.NOT_ANALYZED_NO_NORMS);
         field.setIndexOptions(IndexOptions.DOCS_ONLY);
         return field;
     }
 
-    public Fieldable newAnalyzedStringField(String name, String val) {
+    Fieldable newAnalyzedStringField(String name, String val) {
         return new Field(name, val, store, Field.Index.ANALYZED_NO_NORMS);
     }
 
@@ -158,16 +195,34 @@ public class Mapping {
         return type + ", fields:" + fieldToTypeMapping;
     }
 
-    public String toTermString(Object o) {
-        if (o instanceof String)
-            return (String) o;
-        else if (o instanceof Long)
-            return NumericUtils.longToPrefixCoded((Long) o);
+    public Term toTerm(String fieldName, Object o) {
+        Term t = new Term(fieldName);
+        if (o instanceof String) {
+            if (getAnalyzer(fieldName) == KEYWORD_ANALYZER_LC)
+                return t.createTerm(((String) o).toLowerCase());
+            else
+                return t.createTerm((String) o);
+        } else if (o instanceof Long)
+            return t.createTerm(NumericUtils.longToPrefixCoded((Long) o));
         else if (o instanceof Double)
-            return NumericUtils.doubleToPrefixCoded((Double) o);
+            return t.createTerm(NumericUtils.doubleToPrefixCoded((Double) o));
         else if (o instanceof Date)
-            return DateTools.timeToString(((Date) o).getTime(), DateTools.Resolution.MINUTE);
+            return t.createTerm(DateTools.timeToString(((Date) o).getTime(), DateTools.Resolution.MINUTE));
         else
             throw new UnsupportedOperationException("couldn't transform into string " + o);
+    }
+
+    public Query getQuery(String field, Object o) {
+        Analyzer a = getAnalyzer(field);
+        if (a == KEYWORD_ANALYZER_LC)
+            return new TermQuery(new Term(field, ((String) o).toLowerCase()));
+        else if (a == KEYWORD_ANALYZER)
+            return new TermQuery(new Term(field, (String) o));
+
+        try {
+            return new QueryParser(RawLucene.VERSION, field, a).parse(o.toString());
+        } catch (ParseException ex) {
+            throw new RuntimeException(ex);
+        }
     }
 }

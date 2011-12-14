@@ -41,6 +41,7 @@ public class Mapping {
     public static final Analyzer WHITESPACE_ANALYZER = new WhitespaceAnalyzer(RawLucene.VERSION);
     public static final Analyzer STANDARD_ANALYZER = new StandardAnalyzer(RawLucene.VERSION);
     public static final Analyzer KEYWORD_ANALYZER = new KeywordAnalyzer();
+    public static final Analyzer KEYWORD_ANALYZER_LC = new KeywordAnalyzerLowerCase(RawLucene.VERSION);
 
     public enum Type {
 
@@ -50,7 +51,7 @@ public class Mapping {
     // TODO use _source
     private Field.Store store = Field.Store.YES;
     private Map<String, Type> fieldToTypeMapping = new LinkedHashMap<String, Type>();
-    private LumeoPerFieldAnalyzer analyzer = new LumeoPerFieldAnalyzer(KEYWORD_ANALYZER);
+    private LumeoPerFieldAnalyzer analyzer = new LumeoPerFieldAnalyzer(KEYWORD_ANALYZER_LC);
     private String type;
 
     public Mapping(String type) {
@@ -67,7 +68,7 @@ public class Mapping {
             case DATE:
             case STRING:
             case LONG:
-                if (getAnalyzer(key) != KEYWORD_ANALYZER)
+                if (getAnalyzer(key) != KEYWORD_ANALYZER_LC)
                     throw new IllegalStateException("Internal Problem: Mapping Analyzer "
                             + getAnalyzer(key) + " does not match type " + Type.STRING);
                 break;
@@ -92,7 +93,7 @@ public class Mapping {
             case DATE:
                 return newDateField(key, ((Date) value).getTime());
             case STRING:
-                if (getAnalyzer(key) == KEYWORD_ANALYZER)
+                if (getAnalyzer(key) == KEYWORD_ANALYZER_LC)
                     return newStringField(key, (String) value);
                 else
                     throw new IllegalStateException("Internal Problem: Mapping Analyzer "

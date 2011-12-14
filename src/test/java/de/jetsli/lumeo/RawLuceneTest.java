@@ -17,6 +17,7 @@ package de.jetsli.lumeo;
 
 import de.jetsli.lumeo.util.Mapping;
 import de.jetsli.lumeo.util.SearchExecutor;
+import java.io.IOException;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MatchAllDocsQuery;
@@ -99,5 +100,17 @@ public class RawLuceneTest extends SimpleLuceneTestBase {
             }
         });
         assertEquals("different", doc.get("name"));
+    }
+    
+    @Test public void testRealtimeGetShouldWorkEvenAfterFlushWithoutRefresh() throws IOException {
+        RawLucene rl = g.getRaw();
+        long id = 1;
+        Document doc = rl.createDocument("myId", id, Tmp.class);
+        doc.add(m.newStringField("name", "peter"));
+        rl.put("myId", id, doc);
+        assertNotNull(rl.findById(id));
+        rl.flush();
+        // TODO do not clear buffer in flush but call clear in reopen thread if generation is ok!
+        assertNotNull(rl.findById(id));        
     }
 }

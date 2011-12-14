@@ -30,7 +30,7 @@ public final class SelectiveAnalyzer extends Analyzer {
     public final Analyzer defaultAnalyzer;
 
     public SelectiveAnalyzer() {
-        this(KEYWORD_ANALYZER);
+        this(KEYWORD_ANALYZER_LC);
     }
 
     public SelectiveAnalyzer(Analyzer defaultAnalyzer) {
@@ -43,7 +43,7 @@ public final class SelectiveAnalyzer extends Analyzer {
 
     public Analyzer getAnalyzer(String field) {
         if (field.endsWith("_s"))
-            return KEYWORD_ANALYZER;
+            return KEYWORD_ANALYZER_LC;
         else if (field.endsWith("_t"))
             return STANDARD_ANALYZER;
         else if (field.endsWith("_ws"))

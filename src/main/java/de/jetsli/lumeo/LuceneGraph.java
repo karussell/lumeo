@@ -140,7 +140,6 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
             long id = -1;
             if (userIdObj == null) {
                 id = atomicCounter.incrementAndGet();
-                // use here NumericUtils.longToPrefixCoded() ?
                 userId = Long.toString(id);
             } else {
                 userId = userIdObj.toString();
@@ -187,7 +186,6 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
             long id = -1;
             if (userIdObj == null) {
                 id = atomicCounter.incrementAndGet();
-                // use here NumericUtils.longToPrefixCoded() ?
                 userId = Long.toString(id);
             } else {
                 userId = userIdObj.toString();

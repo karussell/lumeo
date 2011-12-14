@@ -77,7 +77,7 @@ public abstract class LuceneFilterSequence<T> implements CloseableSequence<T> {
 
     public LuceneFilterSequence<T> setValue(String field, Object o) {
         Analyzer a = mapping.getAnalyzer(field);
-        if (a == Mapping.KEYWORD_ANALYZER)
+        if (a == Mapping.KEYWORD_ANALYZER_LC)
             query = new TermQuery(new Term(field, o.toString()));
         else
             try {

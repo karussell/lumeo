@@ -217,14 +217,6 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         }
     }
 
-    public void flush() {
-        try {
-            rawLucene.flush();
-        } catch (IOException ex) {
-            throw new RuntimeException(ex);
-        }
-    }
-
     @Override public Edge getEdge(final Object id) {
         Document doc = rawLucene.findByUserId(id.toString());
         if (doc == null)
@@ -255,7 +247,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
 
     @Override public int getCurrentBufferSize() {
         // TODO not really the correct values ...
-        return rawLucene.getMaxNumRecordsBeforeCommit() * 5 * 1024;
+        return 50 * 1024;
     }
 
     @Override public void setMaxBufferSize(final int size) {

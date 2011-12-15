@@ -31,14 +31,14 @@ public class EdgeVertexBoundSequenceTest extends SimpleLuceneTestBase {
         Vertex v1 = g.addVertex("peter");
         Vertex v2 = g.addVertex("timetabling");
         g.addEdge("idEdge", v1, v2, "twitteraccount");
-        flushAndRefresh();
+        refresh();
 
         EdgeVertexBoundSequence eSeq = new EdgeVertexBoundSequence(g, (LuceneVertex) v1, RawLucene.EDGE_IN);
         assertCount(0, eSeq);
 
         Vertex v3 = g.addVertex("jetslideapp");
         g.addEdge("idEdge2", v3, v1, "twitteraccounting");
-        flushAndRefresh();
+        refresh();
 
         eSeq = new EdgeVertexBoundSequence(g, (LuceneVertex) v1, RawLucene.EDGE_IN);
         assertCount(1, eSeq);
@@ -64,7 +64,7 @@ public class EdgeVertexBoundSequenceTest extends SimpleLuceneTestBase {
 
         Vertex v3 = g.addVertex("jetslideapp");
         g.addEdge("idEdge2", v3, v1, "twitteraccounting");
-        flushAndRefresh();
+        refresh();
 
         EdgeVertexBoundSequence eSeq = new EdgeVertexBoundSequence(g, (LuceneVertex) v1, RawLucene.EDGE_IN).setLabels("twitteraccounting");
         assertCount(1, eSeq);
@@ -86,7 +86,7 @@ public class EdgeVertexBoundSequenceTest extends SimpleLuceneTestBase {
         Vertex v3 = g.addVertex("jetslideapp");
         Edge e2 = g.addEdge("idEdge2", v3, v1, "twitteraccounting");
         e2.setProperty("name", "hellO");
-        flushAndRefresh();
+        refresh();
 
         LuceneFilterSequence<Edge> eSeq = new EdgeVertexBoundSequence(g, (LuceneVertex) v1, 
                 RawLucene.EDGE_IN).setValue("name", "Hello");

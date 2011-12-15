@@ -17,10 +17,13 @@ package de.jetsli.lumeo;
  * limitations under the License.
  */
 import de.jetsli.lumeo.util.IndexOp;
+import de.jetsli.lumeo.util.MapEntry;
 import de.jetsli.lumeo.util.Mapping;
 import de.jetsli.lumeo.util.SearchExecutor;
 import java.io.File;
 import java.io.IOException;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
@@ -79,22 +82,17 @@ public class RawLucene {
     private NRTManager nrtManager;
     private Term uIdTerm = new Term(UID);
     private Term idTerm = new Term(ID);
-    private int maxNumRecordsBeforeIndexing = 5000;
     //Avoid Lucene performing "mega merges" with a finite limit on segments sizes that can be merged
     private int maxMergeMB = 3000;
     private volatile long luceneOperations = 0;
     private long failedLuceneReads = 0;
     private long successfulLuceneReads = 0;
-    private long startTime = System.currentTimeMillis();
     private double ramBufferSizeMB = 128;
     private int termIndexIntervalSize = 512;
-    private long maxFlushInterval = 2000L;
     private final ReadWriteLock indexRWLock = new ReentrantReadWriteLock();
-    // too lazy for a condition from a ReentrantReadWriteLock ... :
-//    private final Object bufferFullLock = new Object();
     // id -> indexOp (create, update, delete)    
-    // we could group indexop and same type (same analyzer) to make indexing faster
-    private Map<Long, IndexOp> batchBuffer = new ConcurrentHashMap<Long, IndexOp>(maxNumRecordsBeforeIndexing);
+    // we could group indexop and same type (same analyzer) to make indexing faster    
+    private final Map<Long, Map<Long, IndexOp>> realTimeCache = new ConcurrentHashMap<Long, Map<Long, IndexOp>>();
     private Logger logger = LoggerFactory.getLogger(getClass());
     private Map<String, Mapping> mappings = new ConcurrentHashMap<String, Mapping>(2);
     private Mapping defaultMapping = new Mapping("_default");
@@ -149,14 +147,20 @@ public class RawLucene {
                     // TODO get some random vertices via getVertices?
                 }
             });
-            int priority = Math.min(Thread.currentThread().getPriority() + 2, Thread.MAX_PRIORITY);
 
+            getCurrentRTCache(latestGen);
+            int priority = Math.min(Thread.currentThread().getPriority() + 2, Thread.MAX_PRIORITY);
             flushThread = new FlushThread("flush-thread");
             flushThread.setPriority(priority);
             flushThread.setDaemon(true);
             flushThread.start();
 
-            reopenThread = new NRTManagerReopenThread(nrtManager, 5.0, 1);
+            // If there are waiting searchers how long should reopen takes?
+            double incomingSearchesMaximumWaiting = 0.03;
+            // If there are no waiting searchers reopen it less frequent.
+            // This also controls how large the realtime cache can be. less frequent reopens => larger cache
+            double ordinaryWaiting = 5.0;
+            reopenThread = new NRTManagerReopenThread(nrtManager, ordinaryWaiting, incomingSearchesMaximumWaiting);
             reopenThread.setName("NRT Reopen Thread");
             reopenThread.setPriority(priority);
             reopenThread.setDaemon(true);
@@ -178,7 +182,7 @@ public class RawLucene {
     }
 
     public Document findById(final long id) {
-        IndexOp result = batchBuffer.get(id);
+        IndexOp result = getCurrentRTCache(latestGen).get(id);
         if (result != null)
             return result.document;
 
@@ -238,6 +242,15 @@ public class RawLucene {
         return findByUserId(uId) != null;
     }
 
+    // not thread safe => only an estimation
+    public int calcSize() {
+        int unflushedEntries = 0;
+        for (Entry<Long, Map<Long, IndexOp>> e : realTimeCache.entrySet()) {
+            unflushedEntries = e.getValue().size();
+        }
+        return unflushedEntries;
+    }
+
     public void close() {
         indexLock();
         try {
@@ -247,8 +260,9 @@ public class RawLucene {
             // avoid loosing data in buffer            
             flush();
 
-            if (batchBuffer.size() > 0)
-                logger.warn("RawLucene.close with buffer greater zero: " + batchBuffer.size());
+            int unflushedEntries = calcSize();
+            if (unflushedEntries > 0)
+                logger.warn("RawLucene.close with unflushed entries greater zero: " + unflushedEntries);
             closed = true;
             nrtManager.close();
             writer.rollback();
@@ -289,8 +303,14 @@ public class RawLucene {
         });
     }
 
-    void removeById(final long id) {
-        batchBuffer.put(id, new IndexOp(IndexOp.Type.DELETE));
+    long removeById(final long id) {
+        try {
+            latestGen = nrtManager.deleteDocuments(getIdTerm(id));
+            getCurrentRTCache(latestGen).put(id, new IndexOp(IndexOp.Type.DELETE));
+            return latestGen;
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
     }
 
     public long fastPut(long id, Document newDoc) {
@@ -298,24 +318,10 @@ public class RawLucene {
             String type = newDoc.get(TYPE);
             if (type == null)
                 throw new UnsupportedOperationException("Document needs to have a type associated");
-
-            // it is important to let the indexing thread do its work
-            if (batchBuffer.size() > 2 * maxNumRecordsBeforeIndexing) {
-                long start = System.currentTimeMillis();
-//                waitUntilSearchable();
-//                synchronized (bufferFullLock) {
-//                    bufferFullLock.wait();
-//                }
-                // logger.info("block due to too many entries " + (System.currentTimeMillis() - start) / 1000f);                
-            }
-
-            IndexOp op = new IndexOp(newDoc, IndexOp.Type.UPDATE);
-            batchBuffer.put(id, op);
-            long currentSearchGeneration = nrtManager.getCurrentSearchingGen(true);
-//            if (batchBuffer.size() > maxNumRecordsBeforeIndexing)
-//                currentSearchGeneration = flush();
-
-            return currentSearchGeneration;
+            Mapping m = getMapping(type);
+            latestGen = nrtManager.updateDocument(getIdTerm(id), newDoc, m.getAnalyzerWrapper());
+            getCurrentRTCache(latestGen).put(id, new IndexOp(newDoc, IndexOp.Type.UPDATE));
+            return latestGen;
         } catch (Exception ex) {
             throw new RuntimeException(ex);
         }
@@ -415,57 +421,63 @@ public class RawLucene {
         return m;
     }
 
-    void flush() throws IOException {
-        // TODO add feed listener to every IndexOp?
-        // lock to avoid duplicate feeding e.g. when calling close + flush thread access this
-        // at the same time
-//        indexLock();
-        if (batchBuffer.isEmpty())
-            return;
-
-        try {
-            logger.info("flush:" + batchBuffer.size() + " " + luceneOperations);
-            for (Entry<Long, IndexOp> entry : batchBuffer.entrySet()) {
-                luceneOperations++;
-                Document d = entry.getValue().document;
-                switch (entry.getValue().type) {
-                    case CREATE:
-                        Mapping m = getMapping(d.get(TYPE));
-                        latestGen = nrtManager.addDocument(d, m.getAnalyzerWrapper());
-                        break;
-                    case UPDATE:
-                        Term t = getIdTerm(entry.getKey());
-                        m = getMapping(d.get(TYPE));
-                        latestGen = nrtManager.updateDocument(t, d, m.getAnalyzerWrapper());
-                        break;
-                    case DELETE:
-                        t = getIdTerm(entry.getKey());
-                        latestGen = nrtManager.deleteDocuments(t);
-                        break;
-                    default:
-                        throw new UnsupportedOperationException("type " + entry.getValue().type + " is not allowed");
-                }
-            }
-            logger.info("flush:" + batchBuffer.size() + " " + luceneOperations);
-            
-            if (logger.isDebugEnabled()) {
-                long diff = System.currentTimeMillis() - startTime;
-                logger.debug(latestGen + " time to last flush:" + diff / 1000f
-                        + ", reads:" + successfulLuceneReads + ", failed reads:" + failedLuceneReads
-                        + ", current ops " + batchBuffer.size() + ", all ops:" + luceneOperations);
-            }
-
-            batchBuffer.clear();
-            failedLuceneReads = 0;
-            successfulLuceneReads = 0;
-            startTime = System.currentTimeMillis();
-        } finally {
-//            indexUnlock();
-            // TODO
-//            synchronized (bufferFullLock) {
-//                bufferFullLock.notifyAll();
+    void flushOld() throws IOException {
+//        try {
+//            logger.info("flush:" + batchBuffer.size() + " " + luceneOperations);
+//            for (Entry<Long, IndexOp> entry : batchBuffer.entrySet()) {
+//                luceneOperations++;
+//                Document d = entry.getValue().document;
+//                switch (entry.getValue().type) {
+//                    case CREATE:
+//                        Mapping m = getMapping(d.get(TYPE));
+//                        latestGen = nrtManager.addDocument(d, m.getAnalyzerWrapper());
+//                        break;
+//                    case UPDATE:
+//                        Term t = getIdTerm(entry.getKey());
+//                        m = getMapping(d.get(TYPE));
+//                        latestGen = nrtManager.updateDocument(t, d, m.getAnalyzerWrapper());
+//                        break;
+//                    case DELETE:
+//                        t = getIdTerm(entry.getKey());
+//                        latestGen = nrtManager.deleteDocuments(t);
+//                        break;
+//                    default:
+//                        throw new UnsupportedOperationException("type " + entry.getValue().type + " is not allowed");
+//                }
 //            }
-        }
+//            logger.info("flush:" + batchBuffer.size() + " " + luceneOperations);
+//            
+//            if (logger.isDebugEnabled()) {
+//                long diff = System.currentTimeMillis() - startTime;
+//                logger.debug(latestGen + " time to last flush:" + diff / 1000f
+//                        + ", reads:" + successfulLuceneReads + ", failed reads:" + failedLuceneReads
+//                        + ", current ops " + batchBuffer.size() + ", all ops:" + luceneOperations);
+//            }
+//
+//            batchBuffer.clear();
+//            failedLuceneReads = 0;
+//            successfulLuceneReads = 0;
+//            startTime = System.currentTimeMillis();
+//        } finally {
+////            indexUnlock();
+//            // TODO
+////            synchronized (bufferFullLock) {
+////                bufferFullLock.notifyAll();
+////            }
+//        }
+    }
+    private Map<Long, IndexOp> tmpCache;
+    private long tmpGen = -2;
+
+    private Map<Long, IndexOp> getCurrentRTCache(long gen) {
+        if (gen > tmpGen)
+            synchronized (realTimeCache) {
+                tmpGen = gen;
+                tmpCache = new ConcurrentHashMap<Long, IndexOp>(100);
+                realTimeCache.put(gen, tmpCache);
+            }
+
+        return tmpCache;
     }
 
     private class FlushThread extends Thread {
@@ -475,17 +487,13 @@ public class RawLucene {
         }
 
         @Override public void run() {
-            long start = System.currentTimeMillis();
             Throwable exception = null;
             while (!isInterrupted()) {
                 try {
-                    long newStart = System.currentTimeMillis();
-//                    logger.info(batchBuffer.size() + " Now while!");
-                    if (batchBuffer.size() > maxNumRecordsBeforeIndexing
-                            || newStart - start > maxFlushInterval) {
-                        start = newStart;
-                        flush();
-                    }
+                    flush(latestGen);
+                } catch (InterruptedException ex) {
+                    exception = ex;
+                    break;
                 } catch (AlreadyClosedException ex) {
                     exception = ex;
                     break;
@@ -501,24 +509,10 @@ public class RawLucene {
                 } catch (Exception ex) {
                     logger.error("Problem while flushing", ex);
                 }
-
-                try {
-//                    logger.info(batchBuffer.size() + " for " + (batchBuffer.size() > maxNumRecordsBeforeIndexing));
-                    for (int i = 0; i < 50; i++) {
-                        // make sure we do not wait if massive indexing rate
-                        if (batchBuffer.size() > maxNumRecordsBeforeIndexing)
-                            break;
-
-                        Thread.sleep(10);
-                    }
-                } catch (InterruptedException ex) {
-                    exception = ex;
-                    break;
-                }
             }
 
             logger.debug("flush-thread interrupted, " + ((exception == null) ? "" : exception.getMessage())
-                    + ", buffer:" + batchBuffer.size());
+                    + ", buffer:" + calcSize());
         }
     }
 
@@ -536,14 +530,6 @@ public class RawLucene {
 
     public void setTermIndexIntervalSize(int termIndexIntervalSize) {
         this.termIndexIntervalSize = termIndexIntervalSize;
-    }
-
-    public int getMaxNumRecordsBeforeCommit() {
-        return maxNumRecordsBeforeIndexing;
-    }
-
-    public void setMaxNumRecordsBeforeCommit(int maxNumRecordsBeforeCommit) {
-        this.maxNumRecordsBeforeIndexing = maxNumRecordsBeforeCommit;
     }
 
     public void setMaxMergeMB(int maxMergeMB) {
@@ -566,30 +552,32 @@ public class RawLucene {
         return successfulLuceneReads;
     }
 
-    public long getMaxFlushInterval() {
-        return maxFlushInterval;
+    public void flush() {
+        try {
+            flush(latestGen);
+        } catch (InterruptedException ex) {
+            logger.error("Interrupted", ex);
+        }
     }
 
-    public void setMaxFlushInterval(long maxFlushInterval) {
-        this.maxFlushInterval = maxFlushInterval;
-    }
-
-    public void waitUntilSearchable() {
-        long tmp = nrtManager.getCurrentSearchingGen(true);
-        logger.info("(1) Gen:" + tmp + " latestGen:" + latestGen + " buffer:" + batchBuffer.size());
-        for (int i = 2; tmp < latestGen; i++) {
-            // this method will block until someone else (maybe)reopens a reader!
-            nrtManager.waitForGeneration(latestGen, true);
-            tmp = nrtManager.getCurrentSearchingGen(true);
-            logger.info("(" + i + ") Gen:" + tmp + " latestGen:" + latestGen + " buffer:" + batchBuffer.size() + " " + luceneOperations);
+    public void flush(long gen) throws InterruptedException {
+        if (nrtManager.getCurrentSearchingGen(true) >= gen) {
+            Thread.sleep(20);
+            return;
         }
 
-        logger.info("Reopened " + batchBuffer.size() + " " + luceneOperations);
-
-//        try {
-//            writer.commit();
-//        } catch (Exception ex) {
-//            logger.error("Cannot commit", ex);
-//        }
+        logger.info("wait for gen:" + gen);
+        nrtManager.waitForGeneration(gen, true);
+        int removed = 0;
+        Iterator<Entry<Long, Map<Long, IndexOp>>> iter = realTimeCache.entrySet().iterator();
+        while (iter.hasNext()) {
+            Entry<Long, Map<Long, IndexOp>> e = iter.next();
+            if (e.getKey() < gen) {
+                iter.remove();
+                removed++;
+                e.getValue().clear();
+            }
+        }
+        logger.info("removed maps:" + removed);
     }
 }

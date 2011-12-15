@@ -32,7 +32,7 @@ public class LuceneIndexTest extends SimpleLuceneTestBase {
         Index<Vertex> index = g.createAutomaticIndex("keyword", Vertex.class, Helper.set("name"));
         Vertex v = g.addVertex(null);
         index.put("name", "peter", v);
-        flushAndRefresh();
+        refresh();
 
         CloseableSequence<Vertex> seq = index.get("name", "peter");
         assertTrue(seq.hasNext());
@@ -47,7 +47,7 @@ public class LuceneIndexTest extends SimpleLuceneTestBase {
         Vertex v2 = g.addVertex(null);        
         Edge e = g.addEdge("tmp", v1, v2, "testing");
         index.put("name", "peter", e);
-        flushAndRefresh();
+        refresh();
 
         CloseableSequence<Edge> seq = index.get("name", "peter");
         assertTrue(seq.hasNext());

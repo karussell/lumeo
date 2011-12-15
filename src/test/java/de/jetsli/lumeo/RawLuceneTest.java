@@ -58,7 +58,7 @@ public class RawLuceneTest extends SimpleLuceneTestBase {
         doc.add(m.createField("name", "peter 2"));
         rl.put("idSomething3", 3, doc);
 
-        flushAndRefresh();
+        refresh();
         assertEquals(1, rl.count("xy", 12L));
         assertEquals(2, rl.count("name", "peter"));
     }
@@ -69,7 +69,7 @@ public class RawLuceneTest extends SimpleLuceneTestBase {
         Document doc = rl.createDocument("myId", id, Tmp.class);
         doc.add(m.createField("name", "peter"));
         rl.put("myId", id, doc);
-        flushAndRefresh();
+        refresh();
         doc = rl.searchSomething(new SearchExecutor<Document>() {
 
             @Override public Document execute(IndexSearcher o) throws Exception {
@@ -77,7 +77,7 @@ public class RawLuceneTest extends SimpleLuceneTestBase {
                 if (td.scoreDocs.length == 0)
                     throw new IllegalStateException("no doc found");
                 if (td.scoreDocs.length > 1)
-                    throw new IllegalStateException("no many docs found");
+                    throw new IllegalStateException("too many docs found");
 
                 return o.doc(td.scoreDocs[0].doc);
             }
@@ -87,7 +87,7 @@ public class RawLuceneTest extends SimpleLuceneTestBase {
         doc = rl.createDocument("myId", id, Tmp.class);
         doc.add(m.createField("name", "different"));
         rl.put("myId", id, doc);
-        flushAndRefresh();
+        refresh();
         doc = rl.searchSomething(new SearchExecutor<Document>() {
 
             @Override public Document execute(IndexSearcher o) throws Exception {
@@ -95,7 +95,7 @@ public class RawLuceneTest extends SimpleLuceneTestBase {
                 if (td.scoreDocs.length == 0)
                     throw new IllegalStateException("no doc found");
                 if (td.scoreDocs.length > 1)
-                    throw new IllegalStateException("no many docs found");
+                    throw new IllegalStateException("too many docs found");
 
                 return o.doc(td.scoreDocs[0].doc);
             }
@@ -113,5 +113,5 @@ public class RawLuceneTest extends SimpleLuceneTestBase {
         rl.flush();
         // TODO do not clear buffer in flush but call clear in reopen thread if generation is ok!
         assertNotNull(rl.findById(id));        
-    }
+    }    
 }

@@ -35,7 +35,7 @@ public class EdgeFilterSequenceTest extends SimpleLuceneTestBase {
         Vertex x1 = g.addVertex("test");
         Vertex x2 = g.addVertex("test2");
         Edge e = g.addEdge(null, x1, x2, "association");
-        flushAndRefresh();
+        refresh();
 
         EdgeFilterSequence seq = new EdgeFilterSequence(g);
         Iterator<Edge> iter = seq.iterator();
@@ -58,7 +58,7 @@ public class EdgeFilterSequenceTest extends SimpleLuceneTestBase {
         e = g.addEdge(null, x1, x3, "association2");
         e.setProperty("hello", "world");
         e.setProperty("hellov", "world");
-        flushAndRefresh();
+        refresh();
 
         assertCount(1, new EdgeFilterSequence(g).setFilter(new TermFilter(new Term("hello", "world"))));
 

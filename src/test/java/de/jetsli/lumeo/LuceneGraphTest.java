@@ -33,7 +33,7 @@ public class LuceneGraphTest extends SimpleLuceneTestBase {
         Vertex v = g.addVertex("peter");
         v.setProperty("fieldA", "test");
         v.setProperty("fieldB", "pest");
-        flushAndRefresh();
+        refresh();
 
         CloseableSequence<Vertex> seq = g.getIndex(indexName, Vertex.class).get("fieldA", "pest");
         assertCount(0, seq);
@@ -53,7 +53,7 @@ public class LuceneGraphTest extends SimpleLuceneTestBase {
         assertNotNull(v);
         AutomaticIndex<Vertex> index = g.createAutomaticIndex("vertex", Vertex.class, Helper.set("fullname", "fullname2,TEXT"));
         v.setProperty("fullname", "peter something");
-        flushAndRefresh();
+        refresh();
 
         CloseableSequence<Vertex> seq = index.get("fullname", "peter something");
         assertCount(1, seq);
@@ -64,7 +64,7 @@ public class LuceneGraphTest extends SimpleLuceneTestBase {
         // Now do some lucene magic ...
         v.setProperty("fullname2", "peter something");
         v.setProperty("fullname3", "peter some thing");
-        flushAndRefresh();
+        refresh();
 
         // ... and search via StandardAnalyzer due to ",TEXT"
         seq = index.get("fullname2", "peter");
@@ -87,15 +87,15 @@ public class LuceneGraphTest extends SimpleLuceneTestBase {
         Vertex v = g.addVertex("peter");
         assertNotNull(v);
         assertNotNull(g.addVertex(null));
-        flushAndRefresh();
+        refresh();
 
         Vertex tmp = g.getVertex("peter");
         assertNotNull(tmp);
         assertEquals(v, tmp);
-        flushAndRefresh();
+        refresh();
 
         g.removeVertex(tmp);
-        flushAndRefresh();
+        refresh();
         assertNull(g.getVertex("peter"));
 
         assertCount(1, g.getVertices());
@@ -105,17 +105,17 @@ public class LuceneGraphTest extends SimpleLuceneTestBase {
         Vertex v = g.addVertex("peter");
         Vertex v2 = g.addVertex("peter2");
         g.addEdge("peter", v, v2, "some label");
-        flushAndRefresh();
+        refresh();
         assertCount(1, new EdgeFilterSequence(g));
     }
 
     @Test public void testDeleteVertex() {
         Vertex v = g.addVertex("peter");
-        flushAndRefresh();
+        refresh();
         assertCount(1, new VertexFilterSequence(g));
 
         g.removeVertex(v);
-        flushAndRefresh();
+        refresh();
         assertCount(0, new VertexFilterSequence(g));
     }
 }

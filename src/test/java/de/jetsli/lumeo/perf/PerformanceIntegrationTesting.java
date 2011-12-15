@@ -83,7 +83,7 @@ public class PerformanceIntegrationTesting extends SimpleLuceneTestBase {
         for (int i = 0; i < 50000; i++) {
             connect(i);
         }        
-        g.getRaw().waitUntilSearchable();
+        g.getRaw().flush();
         logger.info("starting benchmark " + sw.stop().getSeconds());
         float allSecs = 0;
         for (int trial = 0; trial < TRIALS; trial++) {
@@ -92,7 +92,7 @@ public class PerformanceIntegrationTesting extends SimpleLuceneTestBase {
             for (int i = 0; i < 100000; i++) {
                 connect(i);
             }
-            g.getRaw().waitUntilSearchable();
+            g.getRaw().flush();
             float sec1 = sw.stop().getSeconds();
             sw = new StopWatch().start();
             long vs1 = g.count(RawLucene.TYPE, Vertex.class.getSimpleName());

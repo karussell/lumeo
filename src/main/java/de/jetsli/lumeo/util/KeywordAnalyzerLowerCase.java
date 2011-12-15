@@ -20,7 +20,6 @@ import org.apache.lucene.analysis.KeywordTokenizer;
 import org.apache.lucene.analysis.LowerCaseFilter;
 import org.apache.lucene.analysis.ReusableAnalyzerBase;
 import org.apache.lucene.analysis.ReusableAnalyzerBase.TokenStreamComponents;
-import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.util.Version;
 
@@ -39,8 +38,7 @@ public class KeywordAnalyzerLowerCase extends ReusableAnalyzerBase {
     @Override
     protected TokenStreamComponents createComponents(final String fieldName, final Reader reader) {
         Tokenizer tokenizer = new KeywordTokenizer(reader);
-        TokenStream stream = new LowerCaseFilter(version, tokenizer);
-        return new TokenStreamComponents(tokenizer, stream);
+        return new TokenStreamComponents(tokenizer, new LowerCaseFilter(version, tokenizer));
     }
     
     public static String transform(String str) {

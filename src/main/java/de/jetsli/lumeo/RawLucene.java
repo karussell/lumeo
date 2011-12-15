@@ -36,6 +36,7 @@ import org.apache.lucene.index.Term;
 import org.apache.lucene.index.TermDocs;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.NRTManager;
+import org.apache.lucene.search.NRTManagerReopenThread;
 import org.apache.lucene.search.SearcherManager;
 import org.apache.lucene.search.SearcherWarmer;
 import org.apache.lucene.store.AlreadyClosedException;
@@ -52,7 +53,7 @@ import org.slf4j.LoggerFactory;
  * Minor impressions taken from
  * http://code.google.com/p/graphdb-load-tester/source/browse/trunk/src/com/tinkerpop/graph/benchmark/index/LuceneKeyToNodeIdIndexImpl.java
  * 
- * -> still use batchBuffer to improve performance of get (realtime get) and to later support versioning
+ * -> still use batchBuffer to support realtime get and to later support versioning
  * -> use near real time reader, no need for commit 
  * -> no bloomfilter then it is 1 sec (>10%) faster for testIndexing and less memory usage
  *    TODO check if traversal benchmark is also faster
@@ -77,30 +78,31 @@ public class RawLucene {
     private Directory dir;
     private NRTManager nrtManager;
     private Term uIdTerm = new Term(UID);
-    private Term idTerm = new Term(ID);    
-    private int maxNumRecordsBeforeIndexing = 1000;
+    private Term idTerm = new Term(ID);
+    private int maxNumRecordsBeforeIndexing = 5000;
     //Avoid Lucene performing "mega merges" with a finite limit on segments sizes that can be merged
     private int maxMergeMB = 3000;
-    private long luceneOperations = 0;
+    private volatile long luceneOperations = 0;
     private long failedLuceneReads = 0;
     private long successfulLuceneReads = 0;
     private long startTime = System.currentTimeMillis();
     private double ramBufferSizeMB = 128;
     private int termIndexIntervalSize = 512;
-    private long maxFlushInterval = 1000L;
+    private long maxFlushInterval = 2000L;
     private final ReadWriteLock indexRWLock = new ReentrantReadWriteLock();
     // too lazy for a condition from a ReentrantReadWriteLock ... :
-    private final Object bufferFullLock = new Object();
+//    private final Object bufferFullLock = new Object();
     // id -> indexOp (create, update, delete)    
     // we could group indexop and same type (same analyzer) to make indexing faster
-    private Map<Long, IndexOp> batchBuffer = new ConcurrentHashMap<Long, IndexOp>(maxNumRecordsBeforeIndexing);    
+    private Map<Long, IndexOp> batchBuffer = new ConcurrentHashMap<Long, IndexOp>(maxNumRecordsBeforeIndexing);
     private Logger logger = LoggerFactory.getLogger(getClass());
     private Map<String, Mapping> mappings = new ConcurrentHashMap<String, Mapping>(2);
     private Mapping defaultMapping = new Mapping("_default");
     private String name;
     private boolean closed = false;
     private FlushThread flushThread;
-    private ReopenThread reopenThread;
+    private NRTManagerReopenThread reopenThread;
+    private volatile long latestGen = -1;
 
     public RawLucene(String path) {
         try {
@@ -147,9 +149,17 @@ public class RawLucene {
                     // TODO get some random vertices via getVertices?
                 }
             });
+            int priority = Math.min(Thread.currentThread().getPriority() + 2, Thread.MAX_PRIORITY);
+
             flushThread = new FlushThread("flush-thread");
+            flushThread.setPriority(priority);
+            flushThread.setDaemon(true);
             flushThread.start();
-            reopenThread = new ReopenThread("reopen-thread");
+
+            reopenThread = new NRTManagerReopenThread(nrtManager, 5.0, 1);
+            reopenThread.setName("NRT Reopen Thread");
+            reopenThread.setPriority(priority);
+            reopenThread.setDaemon(true);
             reopenThread.start();
             return this;
         } catch (Exception e) {
@@ -231,9 +241,8 @@ public class RawLucene {
     public void close() {
         indexLock();
         try {
-            reopenThread.interrupt();
             flushThread.interrupt();
-            reopenThread.join();
+            reopenThread.close();
             flushThread.join();
             // avoid loosing data in buffer            
             flush();
@@ -293,9 +302,10 @@ public class RawLucene {
             // it is important to let the indexing thread do its work
             if (batchBuffer.size() > 2 * maxNumRecordsBeforeIndexing) {
                 long start = System.currentTimeMillis();
-                synchronized (bufferFullLock) {
-                    bufferFullLock.wait();
-                }
+//                waitUntilSearchable();
+//                synchronized (bufferFullLock) {
+//                    bufferFullLock.wait();
+//                }
                 // logger.info("block due to too many entries " + (System.currentTimeMillis() - start) / 1000f);                
             }
 
@@ -393,7 +403,7 @@ public class RawLucene {
      */
     public Mapping getMapping(String type) {
         if (type == null)
-            throw new NullPointerException("Type shouldn't be empty!");
+            throw new NullPointerException("Type mustn't be empty!");
 
         Mapping m = mappings.get(type);
         if (m == null) {
@@ -405,41 +415,42 @@ public class RawLucene {
         return m;
     }
 
-    long flush() throws IOException {
+    void flush() throws IOException {
         // TODO add feed listener to every IndexOp?
         // lock to avoid duplicate feeding e.g. when calling close + flush thread access this
         // at the same time
 //        indexLock();
         if (batchBuffer.isEmpty())
-            return nrtManager.getCurrentSearchingGen(true);
+            return;
 
         try {
-            long currentSearchGeneration = -1;
+            logger.info("flush:" + batchBuffer.size() + " " + luceneOperations);
             for (Entry<Long, IndexOp> entry : batchBuffer.entrySet()) {
+                luceneOperations++;
                 Document d = entry.getValue().document;
                 switch (entry.getValue().type) {
                     case CREATE:
                         Mapping m = getMapping(d.get(TYPE));
-                        currentSearchGeneration = nrtManager.addDocument(d, m.getAnalyzerWrapper());
+                        latestGen = nrtManager.addDocument(d, m.getAnalyzerWrapper());
                         break;
                     case UPDATE:
                         Term t = getIdTerm(entry.getKey());
                         m = getMapping(d.get(TYPE));
-                        currentSearchGeneration = nrtManager.updateDocument(t, d, m.getAnalyzerWrapper());
+                        latestGen = nrtManager.updateDocument(t, d, m.getAnalyzerWrapper());
                         break;
                     case DELETE:
                         t = getIdTerm(entry.getKey());
-                        currentSearchGeneration = nrtManager.deleteDocuments(t);
+                        latestGen = nrtManager.deleteDocuments(t);
                         break;
                     default:
                         throw new UnsupportedOperationException("type " + entry.getValue().type + " is not allowed");
                 }
             }
-
-            luceneOperations += batchBuffer.size();
+            logger.info("flush:" + batchBuffer.size() + " " + luceneOperations);
+            
             if (logger.isDebugEnabled()) {
                 long diff = System.currentTimeMillis() - startTime;
-                logger.debug("time to last flush:" + diff / 1000f
+                logger.debug(latestGen + " time to last flush:" + diff / 1000f
                         + ", reads:" + successfulLuceneReads + ", failed reads:" + failedLuceneReads
                         + ", current ops " + batchBuffer.size() + ", all ops:" + luceneOperations);
             }
@@ -448,41 +459,12 @@ public class RawLucene {
             failedLuceneReads = 0;
             successfulLuceneReads = 0;
             startTime = System.currentTimeMillis();
-            return currentSearchGeneration;
         } finally {
 //            indexUnlock();
             // TODO
-            synchronized (bufferFullLock) {
-                bufferFullLock.notifyAll();
-            }
-        }
-    }
-
-    private class ReopenThread extends Thread {
-
-        public ReopenThread(String name) {
-            super(name);
-        }
-
-        @Override
-        public void run() {
-            Exception exception = null;
-            while (!isInterrupted()) {
-                try {
-                    Thread.sleep(1500);
-                } catch (InterruptedException ex) {
-                    exception = ex;
-                    break;
-                }
-                try {
-                    nrtManager.maybeReopen(true);
-                } catch (IOException ex) {
-                    exception = ex;
-                    break;
-                }
-            }
-
-            logger.debug(getName() + " interrupted, " + exception == null ? "" : exception.getMessage());
+//            synchronized (bufferFullLock) {
+//                bufferFullLock.notifyAll();
+//            }
         }
     }
 
@@ -498,6 +480,7 @@ public class RawLucene {
             while (!isInterrupted()) {
                 try {
                     long newStart = System.currentTimeMillis();
+//                    logger.info(batchBuffer.size() + " Now while!");
                     if (batchBuffer.size() > maxNumRecordsBeforeIndexing
                             || newStart - start > maxFlushInterval) {
                         start = newStart;
@@ -520,6 +503,7 @@ public class RawLucene {
                 }
 
                 try {
+//                    logger.info(batchBuffer.size() + " for " + (batchBuffer.size() > maxNumRecordsBeforeIndexing));
                     for (int i = 0; i < 50; i++) {
                         // make sure we do not wait if massive indexing rate
                         if (batchBuffer.size() > maxNumRecordsBeforeIndexing)
@@ -588,5 +572,24 @@ public class RawLucene {
 
     public void setMaxFlushInterval(long maxFlushInterval) {
         this.maxFlushInterval = maxFlushInterval;
+    }
+
+    public void waitUntilSearchable() {
+        long tmp = nrtManager.getCurrentSearchingGen(true);
+        logger.info("(1) Gen:" + tmp + " latestGen:" + latestGen + " buffer:" + batchBuffer.size());
+        for (int i = 2; tmp < latestGen; i++) {
+            // this method will block until someone else (maybe)reopens a reader!
+            nrtManager.waitForGeneration(latestGen, true);
+            tmp = nrtManager.getCurrentSearchingGen(true);
+            logger.info("(" + i + ") Gen:" + tmp + " latestGen:" + latestGen + " buffer:" + batchBuffer.size() + " " + luceneOperations);
+        }
+
+        logger.info("Reopened " + batchBuffer.size() + " " + luceneOperations);
+
+//        try {
+//            writer.commit();
+//        } catch (Exception ex) {
+//            logger.error("Cannot commit", ex);
+//        }
     }
 }

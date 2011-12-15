@@ -286,7 +286,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         return rawLucene.toString();
     }
 
-    long count(String fieldName, Object value) {
+    public long count(String fieldName, Object value) {
         return rawLucene.count(fieldName, value);
     }
 

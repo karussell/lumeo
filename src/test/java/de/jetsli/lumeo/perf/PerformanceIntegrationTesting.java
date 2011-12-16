@@ -93,7 +93,7 @@ public class PerformanceIntegrationTesting extends SimpleLuceneTestBase {
                 connect(i);
             }
             g.getRaw().flush();
-            float sec1 = sw.stop().getSeconds();
+            float indexingTime = sw.stop().getSeconds();
             sw = new StopWatch().start();
             long vs1 = g.count(RawLucene.TYPE, Vertex.class.getSimpleName());
             long es2 = g.count(RawLucene.TYPE, Edge.class.getSimpleName());
@@ -102,12 +102,13 @@ public class PerformanceIntegrationTesting extends SimpleLuceneTestBase {
 //            assertEquals(vertices, vs1);
 //            assertEquals(edges, es2);
             
-            logger.info("indexing:" + sec1 + ", querying:" + sw.stop().getSeconds() + " v:" + vs1 + " e:" + es2);
+            logger.info("indexing:" + indexingTime + ", querying:" + sw.stop().getSeconds() + " v:" + vs1 + " e:" + es2);
             logger.info("v:" + vertices + " e:" + edges);
+            allSecs += indexingTime;
             allSecs += sw.getSeconds();
         }
         float res = allSecs / TRIALS;
-        logger.info("finished benchmark with " + res);
+        logger.info("finished benchmark with " + res + " seconds");
         assertTrue("mean of benchmark should be less than 15 seconds but was " + res, res < 15f);
     }
 

@@ -29,6 +29,7 @@ import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.logging.Level;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.NumericField;
 import org.apache.lucene.index.IndexReader;
@@ -101,6 +102,11 @@ public class RawLucene {
     private FlushThread flushThread;
     private NRTManagerReopenThread reopenThread;
     private volatile long latestGen = -1;
+    // If there are waiting searchers how long should reopen takes?
+    double incomingSearchesMaximumWaiting = 0.03;
+    // If there are no waiting searchers reopen it less frequent.
+    // This also controls how large the realtime cache can be. less frequent reopens => larger cache
+    double ordinaryWaiting = 5.0;
 
     public RawLucene(String path) {
         try {
@@ -155,11 +161,6 @@ public class RawLucene {
             flushThread.setDaemon(true);
             flushThread.start();
 
-            // If there are waiting searchers how long should reopen takes?
-            double incomingSearchesMaximumWaiting = 0.03;
-            // If there are no waiting searchers reopen it less frequent.
-            // This also controls how large the realtime cache can be. less frequent reopens => larger cache
-            double ordinaryWaiting = 5.0;
             reopenThread = new NRTManagerReopenThread(nrtManager, ordinaryWaiting, incomingSearchesMaximumWaiting);
             reopenThread.setName("NRT Reopen Thread");
             reopenThread.setPriority(priority);
@@ -244,6 +245,7 @@ public class RawLucene {
 
     // not thread safe => only an estimation
     public int calcSize() {
+        // TODO too many entries are reported
         int unflushedEntries = 0;
         for (Entry<Long, Map<Long, IndexOp>> e : realTimeCache.entrySet()) {
             unflushedEntries = e.getValue().size();
@@ -258,7 +260,7 @@ public class RawLucene {
             reopenThread.close();
             flushThread.join();
             // avoid loosing data in buffer            
-            flush();
+            waitUntilSearchable();
 
             int unflushedEntries = calcSize();
             if (unflushedEntries > 0)
@@ -490,7 +492,7 @@ public class RawLucene {
             Throwable exception = null;
             while (!isInterrupted()) {
                 try {
-                    flush(latestGen);
+                    cleanUpCache(latestGen);
                 } catch (InterruptedException ex) {
                     exception = ex;
                     break;
@@ -552,22 +554,33 @@ public class RawLucene {
         return successfulLuceneReads;
     }
 
+    /**
+     * faster than flush but more expensive as it will force the nrtManager to reopen a reader 
+     * very fast
+     */
+    void waitUntilSearchable() {
+        nrtManager.waitForGeneration(latestGen, true);
+    }
+
     public void flush() {
         try {
-            flush(latestGen);
+            cleanUpCache(latestGen);
         } catch (InterruptedException ex) {
-            logger.error("Interrupted", ex);
+            throw new RuntimeException(ex);
         }
     }
 
-    public void flush(long gen) throws InterruptedException {
+    /**
+     * Very slow compared to waitUntilSearchable but suited for our background thread
+     */
+    void cleanUpCache(long gen) throws InterruptedException {
         if (nrtManager.getCurrentSearchingGen(true) >= gen) {
             Thread.sleep(20);
             return;
         }
 
-        logger.info("wait for gen:" + gen);
-        nrtManager.waitForGeneration(gen, true);
+        // avoid nrtManager.waitForGeneration as we would force the reader to reopen too fast        
+        Thread.sleep(Math.round(ordinaryWaiting * 1000));
         int removed = 0;
         Iterator<Entry<Long, Map<Long, IndexOp>>> iter = realTimeCache.entrySet().iterator();
         while (iter.hasNext()) {
@@ -578,6 +591,6 @@ public class RawLucene {
                 e.getValue().clear();
             }
         }
-        logger.info("removed maps:" + removed);
+        logger.info("removed maps:" + removed + " older than gen:" + gen);
     }
 }

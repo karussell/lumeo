@@ -110,7 +110,7 @@ public class RawLuceneTest extends SimpleLuceneTestBase {
         doc.add(m.createField("name", "peter"));
         rl.put("myId", id, doc);
         assertNotNull(rl.findById(id));
-        rl.flush();
+        rl.waitUntilSearchable();
         // TODO do not clear buffer in flush but call clear in reopen thread if generation is ok!
         assertNotNull(rl.findById(id));        
     }    

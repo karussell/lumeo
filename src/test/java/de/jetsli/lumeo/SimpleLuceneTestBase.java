@@ -42,7 +42,7 @@ public class SimpleLuceneTestBase {
     }
 
     protected void refresh() {
-        g.getRaw().flush();
+        g.getRaw().waitUntilSearchable();
         g.refresh();
     }
 

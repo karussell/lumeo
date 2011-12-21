@@ -95,8 +95,8 @@ public class PerformanceIntegrationTesting extends SimpleLuceneTestBase {
             g.getRaw().flush();
             float indexingTime = sw.stop().getSeconds();
             sw = new StopWatch().start();
-            long vs1 = g.count(RawLucene.TYPE, Vertex.class.getSimpleName());
-            long es2 = g.count(RawLucene.TYPE, Edge.class.getSimpleName());
+            long vs1 = g.count(Vertex.class, RawLucene.TYPE, Vertex.class.getSimpleName());
+            long es2 = g.count(Edge.class, RawLucene.TYPE, Edge.class.getSimpleName());
             
 //            v:99838 e:100000
 //            assertEquals(vertices, vs1);

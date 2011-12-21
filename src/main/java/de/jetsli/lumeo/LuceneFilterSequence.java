@@ -18,21 +18,15 @@ package de.jetsli.lumeo;
 import de.jetsli.lumeo.util.Mapping;
 import de.jetsli.lumeo.util.TermFilter;
 import com.tinkerpop.blueprints.pgm.CloseableSequence;
-import de.jetsli.lumeo.util.KeywordAnalyzerLowerCase;
 import java.io.IOException;
 import java.util.Iterator;
-import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.queryParser.ParseException;
-import org.apache.lucene.queryParser.QueryParser;
+import org.apache.lucene.queries.BooleanFilter;
 import org.apache.lucene.search.BooleanClause.Occur;
-import org.apache.lucene.search.BooleanFilter;
 import org.apache.lucene.search.Filter;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 
 /**
@@ -55,10 +49,10 @@ public abstract class LuceneFilterSequence<T> implements CloseableSequence<T> {
 
     public LuceneFilterSequence(LuceneGraph g, Class<T> type) {
         this.g = g;
-        query = new MatchAllDocsQuery();        
+        query = new MatchAllDocsQuery();
         searcher = g.getRaw().newUnmanagedSearcher();
-        mapping = g.getMapping(type.getSimpleName());
-        baseFilter = new TermFilter(mapping.toTerm(RawLucene.TYPE, type.getSimpleName()));
+        mapping = g.getMapping(type);
+        baseFilter = new TermFilter(RawLucene.TYPE, mapping.toBytes(RawLucene.TYPE, type.getSimpleName()));
     }
 
     public Filter getBaseFilter() {
@@ -72,11 +66,11 @@ public abstract class LuceneFilterSequence<T> implements CloseableSequence<T> {
         return this;
     }
 
-    public LuceneFilterSequence<T> setValue(String field, Object o) {        
-        query = mapping.getQuery(field, o);        
+    public LuceneFilterSequence<T> setValue(String field, Object o) {
+        query = mapping.getQuery(field, o);
         return this;
     }
-    
+
     public LuceneFilterSequence<T> setFilter(Filter filter) {
         this.filter = filter;
         return this;
@@ -120,7 +114,7 @@ public abstract class LuceneFilterSequence<T> implements CloseableSequence<T> {
     }
 
     @Override public void remove() {
-        g.getRaw().removeDoc(doc);        
+        g.getRaw().removeDoc(doc);
     }
 
     @Override public void close() {
@@ -129,7 +123,7 @@ public abstract class LuceneFilterSequence<T> implements CloseableSequence<T> {
             closed = true;
         }
     }
-    
+
     @Override public Iterator<T> iterator() {
         return this;
     }

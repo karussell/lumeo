@@ -15,12 +15,28 @@
  */
 package de.jetsli.lumeo;
 
+import org.apache.lucene.index.codecs.PostingsFormat;
+import org.apache.lucene.index.codecs.lucene40.Lucene40Codec;
+import org.apache.lucene.index.codecs.pulsing.Pulsing40PostingsFormat;
+import org.apache.lucene.search.NRTManager;
+import org.apache.lucene.search.SearcherWarmer;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.store.RAMDirectory;
+import org.apache.lucene.util.Version;
+import de.jetsli.lumeo.util.LumeoPerFieldAnalyzer;
+import org.apache.lucene.document.NumericField;
+import org.apache.lucene.document.TextField;
+import org.apache.lucene.index.Term;
+import de.jetsli.lumeo.util.LuceneHelper;
 import de.jetsli.lumeo.util.Mapping;
 import de.jetsli.lumeo.util.SearchExecutor;
 import java.io.IOException;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MatchAllDocsQuery;
+import org.apache.lucene.search.SearcherManager;
+import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 import org.junit.Test;
 import static org.junit.Assert.*;
@@ -31,36 +47,46 @@ import static org.junit.Assert.*;
 public class RawLuceneTest extends SimpleLuceneTestBase {
 
     Mapping m;
-    
+
     @Override public void setUp() {
         super.setUp();
-        m = new Mapping(Tmp.class.getSimpleName());
+        m = g.getRaw().getMapping(Tmp.class.getSimpleName());
         m.putField("xy", Mapping.Type.LONG);
         m.putField("name", Mapping.Type.STRING);
     }
-    
-    class Tmp {
+
+    static class Tmp {
     }
 
-    @Test public void testCount() {
-        RawLucene rl = g.getRaw();        
+    @Test public void testSimpleCount() throws IOException {
+        RawLucene rl = g.getRaw();
+        Document doc = rl.createDocument("tmp1", 1, Tmp.class);
+        doc.add(m.createField("xy", 12L));
+        rl.put("tmp1", 1, doc);
+        refresh();
+        assertEquals(1, rl.count(Tmp.class, "xy", 12L));
+    }
+
+    @Test public void testCountWithUpdate() {
+        RawLucene rl = g.getRaw();
         Document doc = rl.createDocument("tmp1", 1, Tmp.class);
         doc.add(m.createField("xy", 12L));
         doc.add(m.createField("name", "peter"));
-        rl.put("idSomething", 1, doc);
+        rl.put("tmp1", 1, doc);
 
         doc = rl.createDocument("tmp2", 2, Tmp.class);
         doc.add(m.createField("xy", 1L));
         doc.add(m.createField("name", "peter"));
-        rl.put("idSomething2", 2, doc);
+        rl.put("tmp2", 2, doc);
 
-        doc = rl.createDocument("tmp3", 3, Tmp.class);
+        doc = rl.createDocument("tmp2", 2, Tmp.class);
+        doc.add(m.createField("xy", 12L));
         doc.add(m.createField("name", "peter 2"));
-        rl.put("idSomething3", 3, doc);
+        rl.put("tmp2", 2, doc);
 
         refresh();
-        assertEquals(1, rl.count("xy", 12L));
-        assertEquals(2, rl.count("name", "peter"));
+        assertEquals(2, rl.count(Tmp.class, "xy", 12L));
+        assertEquals(1, rl.count(Tmp.class, "name", "peter"));
     }
 
     @Test public void testUpdateDoc() {
@@ -102,16 +128,35 @@ public class RawLuceneTest extends SimpleLuceneTestBase {
         });
         assertEquals("different", doc.get("name"));
     }
-    
+
     @Test public void testRealtimeGetShouldWorkEvenAfterFlushWithoutRefresh() throws IOException {
         RawLucene rl = g.getRaw();
         long id = 1;
         Document doc = rl.createDocument("myId", id, Tmp.class);
         doc.add(m.createField("name", "peter"));
         rl.put("myId", id, doc);
+
+        // realtime get
         assertNotNull(rl.findById(id));
+
+        // no refresh but wait
         rl.waitUntilSearchable();
-        // TODO do not clear buffer in flush but call clear in reopen thread if generation is ok!
-        assertNotNull(rl.findById(id));        
-    }    
+
+        // get and search via lucene
+        assertNotNull(rl.findById(id));
+        assertEquals(1, rl.count(Tmp.class, "name", "peter"));
+    }
+
+    @Test public void testFindByIdWithoutRefresh() {
+        RawLucene rl = g.getRaw();
+        Document doc = rl.createDocument("test", 123, Tmp.class);
+        rl.put("test", 123, doc);
+
+        // no refresh but wait
+        rl.waitUntilSearchable();
+
+        assertNotNull(rl.findById(123));
+        assertEquals(0, rl.count(Tmp.class, "name", "peter"));
+        assertNotNull("UserId 'test' should be available", rl.findByUserId("test"));
+    }
 }

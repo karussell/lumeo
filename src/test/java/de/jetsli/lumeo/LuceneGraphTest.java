@@ -15,10 +15,12 @@
  */
 package de.jetsli.lumeo;
 
+import org.apache.lucene.document.Document;
 import de.jetsli.lumeo.util.Helper;
 import com.tinkerpop.blueprints.pgm.AutomaticIndex;
 import com.tinkerpop.blueprints.pgm.CloseableSequence;
 import com.tinkerpop.blueprints.pgm.Vertex;
+import org.apache.lucene.document.TextField;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -77,7 +79,7 @@ public class LuceneGraphTest extends SimpleLuceneTestBase {
         }
 
         try {
-            seq = index.get("unsupportedkey", "peter");
+            seq = index.get("fullname3", "peter");
             assertFalse("exception should be raised for unsupported property", true);
         } catch (Exception ex) {
         }
@@ -118,4 +120,19 @@ public class LuceneGraphTest extends SimpleLuceneTestBase {
         refresh();
         assertCount(0, new VertexFilterSequence(g));
     }
+
+//    @Test public void testRangeQueries() {
+//        AutomaticIndex<Vertex> index = g.createAutomaticIndex("vertex", Vertex.class, Helper.set("time,LONG"));
+//        Vertex v = g.addVertex("peter");
+//        v.setProperty("time", 1);
+//
+//        v = g.addVertex("peter2");
+//        v.setProperty("time", 2);
+//
+//        v = g.addVertex("peter3");
+//        v.setProperty("time", 3);
+//        refresh();
+//
+//        assertCount(2, index.get("time", "[2 TO *]"));
+//    }
 }

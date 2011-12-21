@@ -19,9 +19,9 @@ import java.io.File;
 import java.io.IOException;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.Fieldable;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.NRTManager;
@@ -55,7 +55,7 @@ public class ReadESIndexViaLucene {
             TopDocs td = searcher.search(new MatchAllDocsQuery(), 10);
             logger.info("results:" + td.totalHits);
             Document doc = searcher.doc(td.scoreDocs[0].doc);
-            for (Fieldable f : doc.getFields()) {
+            for (IndexableField f : doc.getFields()) {
                 logger.info(f.name() + " " + f.stringValue());
             }
             logger.info(doc.get("tweet/tw"));

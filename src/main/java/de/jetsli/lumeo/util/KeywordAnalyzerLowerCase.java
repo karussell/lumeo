@@ -16,18 +16,18 @@
 package de.jetsli.lumeo.util;
 
 import java.io.Reader;
-import org.apache.lucene.analysis.KeywordTokenizer;
-import org.apache.lucene.analysis.LowerCaseFilter;
-import org.apache.lucene.analysis.ReusableAnalyzerBase;
-import org.apache.lucene.analysis.ReusableAnalyzerBase.TokenStreamComponents;
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.Analyzer.TokenStreamComponents;
 import org.apache.lucene.analysis.Tokenizer;
+import org.apache.lucene.analysis.core.KeywordTokenizer;
+import org.apache.lucene.analysis.core.LowerCaseFilter;
 import org.apache.lucene.util.Version;
 
 /**
  *
  * @author Peter Karich, info@jetsli.de
  */
-public class KeywordAnalyzerLowerCase extends ReusableAnalyzerBase {
+public class KeywordAnalyzerLowerCase extends Analyzer {
     
     private Version version;
 

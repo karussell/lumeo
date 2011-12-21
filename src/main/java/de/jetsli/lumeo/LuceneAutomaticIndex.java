@@ -49,21 +49,21 @@ public class LuceneAutomaticIndex<T extends Element> extends LuceneIndex<T> impl
         if (handle(key))
             return super.get(key, value);
         else
-            throw new UnsupportedOperationException("Unsupported key " + key);
+            throw new UnsupportedOperationException("key not indexed " + key);
     }
 
     @Override public void put(String key, Object value, T element) {
         if (handle(key))
             super.put(key, value, element);
         else
-            throw new UnsupportedOperationException("Unsupported key " + key);
+            throw new UnsupportedOperationException("key not indexed " + key);
     }
 
     @Override public long count(String key, Object value) {
         if (handle(key))
             return super.count(key, value);
         else
-            throw new UnsupportedOperationException("Unsupported key " + key);
+            throw new UnsupportedOperationException("key not indexed " + key);
     }
 
     @Override public Set<String> getAutoIndexKeys() {

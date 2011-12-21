@@ -16,11 +16,14 @@
 package de.jetsli.lumeo.util;
 
 import java.io.IOException;
+import org.apache.lucene.index.DocsEnum;
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermDocs;
+import org.apache.lucene.index.IndexReader.AtomicReaderContext;
 import org.apache.lucene.search.DocIdSet;
+import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Filter;
+import org.apache.lucene.util.Bits;
+import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.FixedBitSet;
 
 /**
@@ -28,41 +31,28 @@ import org.apache.lucene.util.FixedBitSet;
  */
 public class TermFilter extends Filter {
 
-    private Term term;
+    private String fieldName;
+    private BytesRef bytes;
 
-    public TermFilter(Term term) {
-        if (term == null)
+    public TermFilter(String fieldName, BytesRef bytes) {
+        if (bytes == null)
             throw new NullPointerException("Term cannot be null");
-        this.term = term;
+        this.bytes = bytes;
+        this.fieldName = fieldName;
     }
-
-    /* (non-Javadoc)
-     * @see org.apache.lucene.search.Filter#getDocIdSet(org.apache.lucene.index.IndexReader)
-     */
-    @Override public DocIdSet getDocIdSet(IndexReader reader) throws IOException {
+    
+    @Override
+    public DocIdSet getDocIdSet(AtomicReaderContext context, Bits acceptDocs) throws IOException {        
+        IndexReader reader = context.reader;
         FixedBitSet result = new FixedBitSet(reader.maxDoc());
-        TermDocs td = reader.termDocs();
-        try {
-            td.seek(term);
-            while (td.next()) {
-                result.set(td.doc());
-            }
-        } finally {
-            td.close();
+        DocsEnum de = reader.termDocsEnum(acceptDocs, fieldName, bytes, false);
+        if(de == null)
+            return result;
+        
+        int id;
+        while ((id = de.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
+            result.set(id);
         }
         return result;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj == null || getClass() != obj.getClass())
-            return false;
-        final TermFilter other = (TermFilter) obj;
-        return this.term == other.term || this.term.equals(other.term);
-    }
-
-    @Override
-    public int hashCode() {
-        return 13 * 7 + this.term.hashCode();
     }
 }

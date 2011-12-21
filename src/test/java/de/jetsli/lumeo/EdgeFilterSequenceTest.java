@@ -21,6 +21,7 @@ import com.tinkerpop.blueprints.pgm.Edge;
 import java.util.Iterator;
 import com.tinkerpop.blueprints.pgm.Vertex;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.util.BytesRef;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -60,13 +61,13 @@ public class EdgeFilterSequenceTest extends SimpleLuceneTestBase {
         e.setProperty("hellov", "world");
         refresh();
 
-        assertCount(1, new EdgeFilterSequence(g).setFilter(new TermFilter(new Term("hello", "world"))));
+        assertCount(1, new EdgeFilterSequence(g).setFilter(new TermFilter("hello", new BytesRef("world"))));
 
         // hellov gets not indexed
-        assertCount(0, new EdgeFilterSequence(g).setFilter(new TermFilter(new Term("hellov", "world"))));
+        assertCount(0, new EdgeFilterSequence(g).setFilter(new TermFilter("hellov", new BytesRef("world"))));
 
         // ... but stored
-        e = new EdgeFilterSequence(g).setFilter(new TermFilter(new Term("hello", "world"))).next();
+        e = new EdgeFilterSequence(g).setFilter(new TermFilter("hello", new BytesRef("world"))).next();
         assertEquals("world", e.getProperty("hellov"));
     }
 

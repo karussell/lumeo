@@ -15,19 +15,17 @@
  */
 package de.jetsli.lumeo.util;
 
-import java.io.IOException;
-import java.io.Reader;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.document.Fieldable;
+import org.apache.lucene.analysis.Analyzer.TokenStreamComponents;
+import org.apache.lucene.analysis.AnalyzerWrapper;
 
 /**
  * 
  * @author nearly copied from lucene
  */
-public final class LumeoPerFieldAnalyzer extends Analyzer {
+public final class LumeoPerFieldAnalyzer extends AnalyzerWrapper {
 
     private final Analyzer defaultAnalyzer;
     private final Map<String, Analyzer> analyzerMap = new HashMap<String, Analyzer>();
@@ -40,7 +38,7 @@ public final class LumeoPerFieldAnalyzer extends Analyzer {
      * defined to use a different analyzer will use the one provided here.     
      */
     public LumeoPerFieldAnalyzer(Analyzer defaultAnalyzer) {
-        this.defaultAnalyzer = defaultAnalyzer;        
+        this.defaultAnalyzer = defaultAnalyzer;
     }
 
     /**
@@ -53,48 +51,18 @@ public final class LumeoPerFieldAnalyzer extends Analyzer {
         analyzerMap.put(fieldName, analyzer);
     }
 
-    @Override public TokenStream tokenStream(String fieldName, Reader reader) {
-        Analyzer analyzer = analyzerMap.get(fieldName);
-        if (analyzer == null) {
-            analyzer = defaultAnalyzer;
-        }
-
-        return analyzer.tokenStream(fieldName, reader);
-    }
-
-    @Override public TokenStream
-    reusableTokenStream(String fieldName, Reader reader) throws IOException {
-        Analyzer analyzer = analyzerMap.get(fieldName);
-        if (analyzer == null)
-            analyzer = defaultAnalyzer;
-
-        return analyzer.reusableTokenStream(fieldName, reader);
-    }
-
-    /** Return the positionIncrementGap from the analyzer assigned to fieldName */
-    @Override public int getPositionIncrementGap(String fieldName) {
-        Analyzer analyzer = analyzerMap.get(fieldName);
-        if (analyzer == null)
-            analyzer = defaultAnalyzer;
-        return analyzer.getPositionIncrementGap(fieldName);
-    }
-
-    /** Return the offsetGap from the analyzer assigned to field */
-    @Override public int getOffsetGap(Fieldable field) {
-        Analyzer analyzer = analyzerMap.get(field.name());
-        if (analyzer == null)
-            analyzer = defaultAnalyzer;
-        return analyzer.getOffsetGap(field);
-    }
-
-    @Override public String toString() {
-        return "PerFieldAnalyzerWrapper(" + analyzerMap + ", default=" + defaultAnalyzer + ")";
-    }
-
-    public Analyzer getAnalyzer(String field) {
-        Analyzer a = analyzerMap.get(field);
-        if(a == null)
+    @Override protected Analyzer getWrappedAnalyzer(String fieldName) {
+        Analyzer a = analyzerMap.get(fieldName);
+        if (a == null)
             return defaultAnalyzer;
         return a;
     }        
+
+    @Override protected TokenStreamComponents wrapComponents(String fieldName, TokenStreamComponents components) {
+        return components;
+    }
+
+    @Override public String toString() {
+        return "LumeoPerFieldAnalyzer(" + analyzerMap + ", default=" + defaultAnalyzer + ")";
+    }
 }

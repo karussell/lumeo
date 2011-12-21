@@ -9,8 +9,8 @@ import java.util.HashSet;
 import java.util.Set;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.Fieldable;
 import org.apache.lucene.document.NumericField;
+import org.apache.lucene.index.IndexableField;
 
 /**
  * @author Peter Karich, info@jetsli.de
@@ -65,7 +65,7 @@ public abstract class LuceneElement implements Element {
 
     @Override public Set<String> getPropertyKeys() {
         final Set<String> keys = new HashSet<String>();
-        for (final Fieldable key : this.rawElement.getFields()) {
+        for (final IndexableField key : this.rawElement.getFields()) {
             keys.add(key.name());
         }
         return keys;
@@ -80,7 +80,7 @@ public abstract class LuceneElement implements Element {
     }
 
     @Override public Object getId() {
-        return ((NumericField) rawElement.getFieldable(RawLucene.ID)).getNumericValue().longValue();
+        return ((NumericField) rawElement.getField(RawLucene.ID)).numericValue().longValue();
     }
 
     public String getType() {
@@ -95,6 +95,6 @@ public abstract class LuceneElement implements Element {
     }
 
     Analyzer getAnalyzer(String field) {
-        return m.getAnalyzer(field);
+        return m.getAnalyzerFor(field);
     }
 }

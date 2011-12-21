@@ -11,7 +11,6 @@ import com.tinkerpop.blueprints.pgm.IndexableGraph;
 import com.tinkerpop.blueprints.pgm.TransactionalGraph;
 import com.tinkerpop.blueprints.pgm.Vertex;
 
-import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -44,9 +43,10 @@ import org.slf4j.LoggerFactory;
  * - no transaction support
  * 
  * TODO
- * - caching is bad at the moment. also test advanced caching strategies (e.g. measure degree centrality, cluster)
- *   especially use FieldCache for user and long IDs
- * - Use several tuning possibilities in Lucene
+ * - caching is bad at the moment. 
+ * - no advanced caching strategies (e.g. measure degree centrality, cluster)
+ * - use FieldCache or DocValues for user and long IDs and similar
+ * - use several tuning possibilities in Lucene
  * - Reimplement a subset of the lucene functionality by using search trees in the graph?
  * 
  * @author Peter Karich, info@jetsli.de
@@ -83,7 +83,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         if (keys == null)
             throw new UnsupportedOperationException("you need to specify key which should get indexed for " + indexClass);
 
-        Mapping m = getMapping(indexClass.getSimpleName());
+        Mapping m = getMapping(indexClass);
         for (String k : keys) {
             // DEFAULT type for all keys is normal string and to lower case!
             Mapping.Type type = m.getDefaultType();
@@ -153,7 +153,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
                     id = atomicCounter.incrementAndGet();
 
                 doc = rawLucene.createDocument(userId, id, Vertex.class);
-                rawLucene.put(userId, id, doc);
+                rawLucene.fastPut(id, doc);
             }
 
             return new LuceneVertex(this, doc);
@@ -205,7 +205,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
                 }
 
                 rawLucene.initRelation(edgeDoc, ((LuceneElement) outVertex).getRaw(), ((LuceneElement) inVertex).getRaw());
-                rawLucene.put(userId, id, edgeDoc);
+                rawLucene.fastPut(id, edgeDoc);
             } finally {
                 rawLucene.indexUnlock();
             }
@@ -278,8 +278,8 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         return rawLucene.toString();
     }
 
-    public long count(String fieldName, Object value) {
-        return rawLucene.count(fieldName, value);
+    public long count(Class cl, String fieldName, Object value) {
+        return rawLucene.count(cl, fieldName, value);
     }
 
     void refresh() {
@@ -288,5 +288,9 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
 
     Mapping getMapping(String type) {
         return rawLucene.getMapping(type);
+    }
+    
+    Mapping getMapping(Class cl) {
+        return rawLucene.getMapping(cl);
     }
 }

@@ -17,8 +17,7 @@ package de.jetsli.lumeo.util;
 
 import java.io.Reader;
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.document.Fieldable;
+import org.apache.lucene.index.IndexableField;
 import static de.jetsli.lumeo.util.Mapping.*;
 
 /**
@@ -36,10 +35,14 @@ public final class SelectiveAnalyzer extends Analyzer {
     public SelectiveAnalyzer(Analyzer defaultAnalyzer) {
         this.defaultAnalyzer = defaultAnalyzer;
     }
-
-    @Override public TokenStream tokenStream(String field, final Reader reader) {
-        return getAnalyzer(field).tokenStream(field, reader);
-    }
+        
+    @Override protected TokenStreamComponents createComponents(String fieldName, Reader aReader) {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }    
+    
+//    @Override protected TokenStreamComponents createComponents(String fieldName, Reader aReader) {        
+//        return getAnalyzer(fieldName).createComponents(fieldName, aReader);
+//    }
 
     public Analyzer getAnalyzer(String field) {
         if (field.endsWith("_s"))
@@ -56,7 +59,7 @@ public final class SelectiveAnalyzer extends Analyzer {
         return getAnalyzer(fieldName).getPositionIncrementGap(fieldName);
     }
 
-    @Override public int getOffsetGap(Fieldable field) {
+    @Override public int getOffsetGap(IndexableField field) {
         return getAnalyzer(field.name()).getOffsetGap(field);
     }
 

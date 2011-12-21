@@ -30,7 +30,7 @@ public class LuceneEdge extends LuceneElement implements Edge {
     }
 
     @Override public Vertex getOutVertex() {
-        long id = ((NumericField) getRaw().getFieldable(RawLucene.VERTEX_OUT)).getNumericValue().longValue();
+        long id = ((NumericField) getRaw().getField(RawLucene.VERTEX_OUT)).numericValue().longValue();
         Document doc = g.getRaw().findById(id);
         if (doc == null)
             throw new NullPointerException("Didn't found out vertex of edge with id " + id);
@@ -38,7 +38,7 @@ public class LuceneEdge extends LuceneElement implements Edge {
     }
 
     @Override public Vertex getInVertex() {
-        long id = ((NumericField) getRaw().getFieldable(RawLucene.VERTEX_IN)).getNumericValue().longValue();
+        long id = ((NumericField) getRaw().getField(RawLucene.VERTEX_IN)).numericValue().longValue();
         Document doc = g.getRaw().findById(id);
         if (doc == null)
             throw new NullPointerException("Didn't found in vertex of edge with id " + id);

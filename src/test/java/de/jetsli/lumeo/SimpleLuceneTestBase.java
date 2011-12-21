@@ -38,11 +38,11 @@ public class SimpleLuceneTestBase {
     }
 
     @After public void tearDown() {
-        g.shutdown();
+        if (g != null)
+            g.shutdown();
     }
 
     protected void refresh() {
-        g.getRaw().waitUntilSearchable();
         g.refresh();
     }
 

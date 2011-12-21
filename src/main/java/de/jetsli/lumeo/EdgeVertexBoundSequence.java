@@ -16,13 +16,13 @@
 package de.jetsli.lumeo;
 
 import de.jetsli.lumeo.util.KeywordAnalyzerLowerCase;
+import de.jetsli.lumeo.util.LuceneHelper;
 import de.jetsli.lumeo.util.TermFilter;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.queries.BooleanFilter;
+import org.apache.lucene.queries.TermsFilter;
 import org.apache.lucene.search.BooleanClause.Occur;
-import org.apache.lucene.search.BooleanFilter;
 import org.apache.lucene.search.Filter;
-import org.apache.lucene.search.TermsFilter;
-import org.apache.lucene.util.NumericUtils;
 
 /**
  *
@@ -30,7 +30,6 @@ import org.apache.lucene.util.NumericUtils;
  */
 public class EdgeVertexBoundSequence extends EdgeFilterSequence {
 
-    private static Term labelTerm = new Term(RawLucene.EDGE_LABEL);
     private final LuceneVertex vertexDoc;
     private final String[] edgeTypes;
     private String[] edgeLabels;
@@ -57,8 +56,8 @@ public class EdgeVertexBoundSequence extends EdgeFilterSequence {
             if (edgeTypes != null) {
                 if (edgeTypes.length == 1) {
                     String vertexField = RawLucene.getVertexFieldForEdgeType(edgeTypes[0]);
-                    String idStr = NumericUtils.longToPrefixCoded((Long) vertexDoc.getId());                    
-                    edgeFilter.add(new TermFilter(new Term(vertexField, idStr)), Occur.MUST);
+                    edgeFilter.add(new TermFilter(vertexField,
+                            LuceneHelper.newRefFromLong((Long) vertexDoc.getId())), Occur.MUST);
                 }
                 // no restriction as both types are accepted
             }
@@ -67,7 +66,7 @@ public class EdgeVertexBoundSequence extends EdgeFilterSequence {
             if (edgeLabels != null && edgeLabels.length > 0) {
                 TermsFilter tf = new TermsFilter();
                 for (String label : edgeLabels) {
-                    tf.addTerm(labelTerm.createTerm(KeywordAnalyzerLowerCase.transform(label)));
+                    tf.addTerm(new Term(RawLucene.EDGE_LABEL, KeywordAnalyzerLowerCase.transform(label)));
                 }
                 edgeFilter.add(tf, Occur.MUST);
             }

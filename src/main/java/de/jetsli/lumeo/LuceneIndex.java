@@ -6,7 +6,7 @@ import com.tinkerpop.blueprints.pgm.Element;
 import com.tinkerpop.blueprints.pgm.Index;
 import com.tinkerpop.blueprints.pgm.Vertex;
 import com.tinkerpop.blueprints.pgm.impls.StringFactory;
-import org.apache.lucene.document.Fieldable;
+import org.apache.lucene.index.IndexableField;
 
 /**
  * @author Peter Karich, info@jetsli.de
@@ -55,7 +55,7 @@ public class LuceneIndex<T extends Element> implements Index<T> {
     }
 
     @Override public long count(final String key, final Object value) {
-        return g.count(key, value);
+        return g.count(getIndexClass(), key, value);
     }
 
     @Override public void remove(final String key, final Object value, final T element) {
@@ -70,7 +70,7 @@ public class LuceneIndex<T extends Element> implements Index<T> {
         ((LuceneElement) element).getRaw().removeField(key);
     }
 
-    protected void putField(Fieldable field, T element) {
+    protected void putField(IndexableField field, T element) {
         ((LuceneElement) element).getRaw().add(field);
     }
 

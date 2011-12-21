@@ -21,20 +21,22 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.KeywordAnalyzer;
-import org.apache.lucene.analysis.WhitespaceAnalyzer;
+import org.apache.lucene.analysis.core.KeywordAnalyzer;
+import org.apache.lucene.analysis.core.WhitespaceAnalyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.DateTools;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.Fieldable;
+import org.apache.lucene.document.FieldType;
 import org.apache.lucene.document.NumericField;
+import org.apache.lucene.document.StringField;
+import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.FieldInfo.IndexOptions;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.queryParser.ParseException;
-import org.apache.lucene.queryParser.QueryParser;
+import org.apache.lucene.queryparser.classic.ParseException;
+import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TermQuery;
-import org.apache.lucene.util.NumericUtils;
+import org.apache.lucene.util.BytesRef;
 
 /**
  * This class defines how specific field will be indexed and queried (if stored, which analyzers, ...)
@@ -52,15 +54,31 @@ public class Mapping {
 
         DATE, LONG, DOUBLE, STRING, STRING_LC, TEXT
     }
-    // store all fields per default 
-    // TODO use _source
-    private Field.Store store = Field.Store.YES;
+    private final FieldType storedFieldType;
+    private final FieldType indexedFieldType;
     private final Map<String, Type> fieldToTypeMapping;
     private final LumeoPerFieldAnalyzer analyzer;
     private String type;
 
     public Mapping(String type) {
         this.type = type;
+        
+        // TODO use one field _source instead of several fields
+        storedFieldType = new FieldType();        
+        storedFieldType.setStored(true);        
+        storedFieldType.setOmitNorms(true);    
+        storedFieldType.setIndexOptions(IndexOptions.DOCS_ONLY);
+        storedFieldType.setIndexed(false);
+        storedFieldType.freeze();
+
+        indexedFieldType = new FieldType();
+        indexedFieldType.setIndexOptions(IndexOptions.DOCS_ONLY);
+        indexedFieldType.setOmitNorms(true);    
+        indexedFieldType.setStoreTermVectors(false);        
+        indexedFieldType.setStored(true);
+        indexedFieldType.setIndexed(true);
+        indexedFieldType.freeze();
+
         analyzer = new LumeoPerFieldAnalyzer(getDefaultAnalyzer());
         fieldToTypeMapping = new LinkedHashMap<String, Type>(4);
         //putField(RawLucene.ID, Type.LONG);
@@ -91,15 +109,9 @@ public class Mapping {
             case STRING_LC:
                 analyzer.putAnalyzer(key, KEYWORD_ANALYZER_LC);
                 break;
-            case DATE:
-                analyzer.putAnalyzer(key, KEYWORD_ANALYZER);
-                break;
-            case STRING:
-                analyzer.putAnalyzer(key, KEYWORD_ANALYZER);
-                break;
-            case DOUBLE:
-                analyzer.putAnalyzer(key, KEYWORD_ANALYZER);
-                break;
+            case DATE:                
+            case STRING:                
+            case DOUBLE:                
             case LONG:
                 analyzer.putAnalyzer(key, KEYWORD_ANALYZER);
                 break;
@@ -113,69 +125,66 @@ public class Mapping {
         return fieldToTypeMapping.keySet();
     }
 
-    public Fieldable createField(String key, Object value) {
+    public Field createField(String key, Object value) {
         Type t = fieldToTypeMapping.get(key);
 
-        // if no mapping found -> gets not indexed
+        // if no mapping found -> gets not indexed but stored
         if (t == null)
-            return new Field(key, value.toString(), store, Field.Index.NO);
+            return new Field(key, value.toString(), storedFieldType);
 
         switch (t) {
             case DATE:
                 return newDateField(key, ((Date) value).getTime());
             case STRING:
-                if (getAnalyzer(key) == KEYWORD_ANALYZER)
+                if (getAnalyzerFor(key) == KEYWORD_ANALYZER)
                     return newStringField(key, (String) value);
                 else
                     throw new IllegalStateException("Internal Problem: Mapping Analyzer "
-                            + getAnalyzer(key) + " does not match type " + Type.STRING);
+                            + getAnalyzerFor(key) + " does not match type " + Type.STRING);
             case STRING_LC:
-                if (getAnalyzer(key) == KEYWORD_ANALYZER_LC)
+                if (getAnalyzerFor(key) == KEYWORD_ANALYZER_LC)
                     return newStringField(key, KeywordAnalyzerLowerCase.transform((String) value));
                 else
                     throw new IllegalStateException("Internal Problem: Mapping Analyzer "
-                            + getAnalyzer(key) + " does not match type " + Type.STRING_LC);
+                            + getAnalyzerFor(key) + " does not match type " + Type.STRING_LC);
             case TEXT:
-                return newAnalyzedStringField(key, (String) value);
+                return newTextField(key, (String) value);
             case LONG:
-                return newLongField(key, (Long) value);
+                return newLongField(key, ((Number) value).longValue());
             default:
                 throw new IllegalStateException("something went wrong while determining field type");
         }
     }
 
-    public Fieldable newDateField(String name, long value) {
-        return new Field(name, DateTools.timeToString(value, DateTools.Resolution.MINUTE),
-                store, Field.Index.NOT_ANALYZED);
+    public Field newDateField(String name, long value) {
+        // TODO performance shouldn't we round the long and use long instead of string?
+        return new Field(name, DateTools.timeToString(value, DateTools.Resolution.MINUTE), indexedFieldType);
     }
 
-    public Fieldable newLongField(String name, long id) {
-        NumericField idField = new NumericField(name, 6, store, true).setLongValue(id);
-        idField.setIndexOptions(IndexOptions.DOCS_ONLY);
+    public Field newLongField(String name, long id) {
+        NumericField idField = new NumericField(name, 6, NumericField.TYPE_STORED).setLongValue(id);
         return idField;
     }
 
     /** Creates a numerical identification */
-    public Fieldable newIdField(String name, long id) {
-        NumericField idField = new NumericField(name, 6, store, true).setLongValue(id);
-        idField.setIndexOptions(IndexOptions.DOCS_ONLY);
+    public Field newIdField(String name, long id) {
+        NumericField idField = new NumericField(name, 6, NumericField.TYPE_STORED).setLongValue(id);
         return idField;
     }
 
     /** Creates a user specified identification */
-    public Fieldable newUIdField(String name, String val) {
+    public Field newUIdField(String name, String val) {
         return newStringField(name, val);
     }
 
     /** Necessary for keywordanalyzer */
-    Fieldable newStringField(String name, String val) {
-        Field field = new Field(name, val, store, Field.Index.NOT_ANALYZED_NO_NORMS);
-        field.setIndexOptions(IndexOptions.DOCS_ONLY);
+    Field newStringField(String name, String val) {
+        Field field = new Field(name, val, StringField.TYPE_STORED);
         return field;
     }
 
-    Fieldable newAnalyzedStringField(String name, String val) {
-        return new Field(name, val, store, Field.Index.ANALYZED_NO_NORMS);
+    Field newTextField(String name, String val) {
+        return new TextField(name, val);
     }
 
     public boolean exists(String key) {
@@ -183,11 +192,11 @@ public class Mapping {
     }
 
     /** @return the analyzer per field */
-    public Analyzer getAnalyzer(String field) {
-        return analyzer.getAnalyzer(field);
+    public Analyzer getAnalyzerFor(String field) {
+        return analyzer.getWrappedAnalyzer(field);
     }
 
-    public Analyzer getAnalyzerWrapper() {
+    public Analyzer getCombinedAnalyzer() {
         return analyzer;
     }
 
@@ -195,25 +204,27 @@ public class Mapping {
         return type + ", fields:" + fieldToTypeMapping;
     }
 
-    public Term toTerm(String fieldName, Object o) {
-        Term t = new Term(fieldName);
+    public BytesRef toBytes(String fieldName, Object o) {
         if (o instanceof String) {
-            if (getAnalyzer(fieldName) == KEYWORD_ANALYZER_LC)
-                return t.createTerm(((String) o).toLowerCase());
+            if (getAnalyzerFor(fieldName) == KEYWORD_ANALYZER_LC)
+                return new BytesRef(((String) o).toLowerCase());
             else
-                return t.createTerm((String) o);
-        } else if (o instanceof Long)
-            return t.createTerm(NumericUtils.longToPrefixCoded((Long) o));
+                return new BytesRef((String) o);
+        } else if (o instanceof Integer)
+            return LuceneHelper.newRefFromInt((Integer) o);
+        else if (o instanceof Long)
+            return LuceneHelper.newRefFromLong((Long) o);
         else if (o instanceof Double)
-            return t.createTerm(NumericUtils.doubleToPrefixCoded((Double) o));
+            return LuceneHelper.newRefFromDouble((Double) o);
         else if (o instanceof Date)
-            return t.createTerm(DateTools.timeToString(((Date) o).getTime(), DateTools.Resolution.MINUTE));
+            return new BytesRef(DateTools.timeToString(((Date) o).getTime(), DateTools.Resolution.MINUTE));
         else
-            throw new UnsupportedOperationException("couldn't transform into string " + o);
+            throw new UnsupportedOperationException(
+                    "Couldn't find bytesRef usage for object  " + o);
     }
 
     public Query getQuery(String field, Object o) {
-        Analyzer a = getAnalyzer(field);
+        Analyzer a = getAnalyzerFor(field);
         if (a == KEYWORD_ANALYZER_LC)
             return new TermQuery(new Term(field, ((String) o).toLowerCase()));
         else if (a == KEYWORD_ANALYZER)

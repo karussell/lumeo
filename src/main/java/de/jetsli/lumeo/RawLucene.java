@@ -19,6 +19,7 @@ package de.jetsli.lumeo;
 import de.jetsli.lumeo.util.IndexOp;
 import de.jetsli.lumeo.util.LuceneHelper;
 import de.jetsli.lumeo.util.Mapping;
+import de.jetsli.lumeo.util.MyGather;
 import de.jetsli.lumeo.util.SearchExecutor;
 import java.io.File;
 import java.io.IOException;
@@ -30,14 +31,15 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.NumericField;
+import org.apache.lucene.index.DocsEnum;
+import org.apache.lucene.index.Fields;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.LogByteSizeMergePolicy;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.codecs.PostingsFormat;
-import org.apache.lucene.index.codecs.lucene40.Lucene40Codec;
-import org.apache.lucene.index.codecs.pulsing.Pulsing40PostingsFormat;
+import org.apache.lucene.index.Terms;
+import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.NRTManager;
 import org.apache.lucene.search.NRTManagerReopenThread;
@@ -48,6 +50,7 @@ import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.util.Bits.MatchAllBits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.Version;
 import org.slf4j.Logger;
@@ -144,6 +147,7 @@ public class RawLucene {
             cfg.setMergePolicy(mp);
 
             // TODO specify different formats for id fields etc
+            // -> this breaks 16 of our tests!? Lucene Bug?
 //            cfg.setCodec(new Lucene40Codec() {
 //
 //                @Override public PostingsFormat getPostingsFormatForField(String field) {
@@ -211,55 +215,29 @@ public class RawLucene {
     public Document findByUserId(final String uId) {
         return searchSomething(new SearchExecutor<Document>() {
 
-            @Override public Document execute(IndexSearcher searcher) throws Exception {
-                // TODO optimize via indexReader.termDocsEnum !?
-                // or this
-//                Fields fields = reader.fields();
-//                Terms terms = fields.terms("body");
-//                TermsEnum iter = terms.iterator();
-//                if (iter.seek(new BytesRef("pod")) == SeekStatus.FOUND) {
-//                    DocsEnum docs = iter.docs(null);
-//                    int docID;
-//                    while ((docID = docs.nextDoc()) != DocsEnum.NO_MORE_DOCS) {
-//                    }
-//                }
+            Document doc;
 
-                TopDocs td = searcher.search(new TermQuery(new Term(UID, uId)), 1);
-                if (td.totalHits == 0)
-                    return null;
+            @Override public Document execute(final IndexSearcher searcher) throws IOException {
+                final BytesRef bytes = new BytesRef(uId);
+                new MyGather(searcher.getIndexReader()) {
 
-                if (td.totalHits > 1)
-                    throw new IllegalStateException("User id is not the only one:" + uId);
+                    @Override protected boolean runLeaf(int base, IndexReader leaf) throws IOException {
+                        DocsEnum docs = leaf.termDocsEnum(leaf.getLiveDocs(), UID, bytes, false);
+                        if (docs == null)
+                            return true;
 
-                return searcher.doc(td.scoreDocs[0].doc);
+                        int docID = docs.nextDoc();
+                        if (docID == DocsEnum.NO_MORE_DOCS)
+                            return true;
 
-//                http://code.google.com/a/apache-extras.org/p/luceneutil/source/browse/perf/PKLookupPerfTest.java
-//                final IndexReader[] subs = r.getSequentialSubReaders();
-//                for(int subIdx=0;subIdx<subs.length;subIdx++) {
-//                    TermsEnum te = subs[subIdx].fields().terms("id").iterator(null);
-//                    if (termsEnum.seekExact(bytesRefTerm, false)) {...}                  
-//                    realDocID = base + docID;
-//                    base += sub.maxDoc();
+                        if (docs.nextDoc() != DocsEnum.NO_MORE_DOCS)
+                            throw new IllegalStateException("Document with " + UID + "=" + uId + " not the only one");
 
-
-                // OR?
-//                final List<IndexReader> leaves = new ArrayList<IndexReader>();
-//                ReaderUtil.gatherSubReaders(leaves, searcher.getIndexReader());
-//                BytesRef ref = new BytesRef(uId);
-//                for (IndexReader leaf : leaves) {
-//                    DocsEnum de = leaf.termDocsEnum(new Bits.MatchAllBits(leaf.maxDoc()),
-//                            UID, ref, false);
-//                    if (de == null)
-//                        return null;
-//
-//                    int id = de.nextDoc();
-//                    if (id == DocIdSetIterator.NO_MORE_DOCS)
-//                        continue;
-//
-//                    return leaf.document(id);
-//                }
-//                
-//                return null;
+                        doc = searcher.doc(base + docID);
+                        return false;
+                    }
+                }.run();
+                return doc;
             }
         });
     }
@@ -313,9 +291,9 @@ public class RawLucene {
             closed = true;
             nrtManager.close();
             try {
-//                waitUntilSearchable();
+                waitUntilSearchable();
 //                writer.waitForMerges();
-                writer.commit();
+//                writer.commit();
             } catch (Exception ex) {
                 logger.warn("Couldn't commit changes to writer", ex);
                 writer.rollback();
@@ -341,8 +319,8 @@ public class RawLucene {
     /**
      * Warning: Counts only docs already indexed - exclusive the realtime cache if not yet commited.
      */
-    long count(Class cl, final String fieldName, Object val) {        
-        Mapping m = getMapping(cl);        
+    long count(Class cl, final String fieldName, Object val) {
+        Mapping m = getMapping(cl);
         final BytesRef bytes = m.toBytes(fieldName, val);
         return searchSomething(new SearchExecutor<Long>() {
 
@@ -613,5 +591,5 @@ public class RawLucene {
 
     public NRTManager getNrtManager() {
         return nrtManager;
-    }        
+    }
 }

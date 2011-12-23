@@ -15,28 +15,12 @@
  */
 package de.jetsli.lumeo;
 
-import org.apache.lucene.index.codecs.PostingsFormat;
-import org.apache.lucene.index.codecs.lucene40.Lucene40Codec;
-import org.apache.lucene.index.codecs.pulsing.Pulsing40PostingsFormat;
-import org.apache.lucene.search.NRTManager;
-import org.apache.lucene.search.SearcherWarmer;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.store.RAMDirectory;
-import org.apache.lucene.util.Version;
-import de.jetsli.lumeo.util.LumeoPerFieldAnalyzer;
-import org.apache.lucene.document.NumericField;
-import org.apache.lucene.document.TextField;
-import org.apache.lucene.index.Term;
-import de.jetsli.lumeo.util.LuceneHelper;
 import de.jetsli.lumeo.util.Mapping;
 import de.jetsli.lumeo.util.SearchExecutor;
 import java.io.IOException;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MatchAllDocsQuery;
-import org.apache.lucene.search.SearcherManager;
-import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 import org.junit.Test;
 import static org.junit.Assert.*;
@@ -145,6 +129,14 @@ public class RawLuceneTest extends SimpleLuceneTestBase {
         // get and search via lucene
         assertNotNull(rl.findById(id));
         assertEquals(1, rl.count(Tmp.class, "name", "peter"));
+    }
+
+    @Test public void testNoMatchAfterDelete() {
+        RawLucene rl = g.getRaw();        
+        Document doc = rl.createDocument("test", 123, Tmp.class);
+        rl.put("test", 123, doc);
+        rl.removeDoc(doc);
+        assertNull(rl.findById(123));
     }
 
     @Test public void testFindByIdWithoutRefresh() {

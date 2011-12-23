@@ -50,6 +50,7 @@ import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.store.NRTCachingDirectory;
 import org.apache.lucene.util.Bits.MatchAllBits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.Version;
@@ -112,7 +113,9 @@ public class RawLucene {
     double ordinaryWaiting = 5.0;
 
     public RawLucene(String path) {
-        try {
+        try {            
+            // if indexing rate is lowish but reopen rate is highish
+            // dir = new NRTCachingDirectory(FSDirectory.open(new File(path)), 5, 60);
             dir = FSDirectory.open(new File(path));
             name = "fs:" + path + " " + dir.toString();
         } catch (IOException ex) {
@@ -193,8 +196,11 @@ public class RawLucene {
 
     public Document findById(final long id) {
         IndexOp result = getCurrentRTCache(latestGen).get(id);
-        if (result != null)
+        if (result != null) {
+            if (result.type == IndexOp.Type.DELETE)
+                return null;
             return result.document;
+        }
 
         return searchSomething(new SearchExecutor<Document>() {
 
@@ -506,8 +512,8 @@ public class RawLucene {
     }
 
     /**
-     * Nearly always faster than flush but more expensive as it will force the nrtManager to 
-     * reopen a reader very fast
+     * Nearly always faster than flush but slightly more expensive as it will force the nrtManager 
+     * to reopen a reader very fast
      */
     void waitUntilSearchable() {
         nrtManager.waitForGeneration(latestGen, true);
@@ -522,8 +528,8 @@ public class RawLucene {
     }
 
     /**
-     * Very slow compared to waitUntilSearchable but efficient for indexing and so it is 
-     * suited for our background thread
+     * Very slow compared to waitUntilSearchable but slightly more efficient (~3%) for indexing 
+     * and so it is suited for our background thread
      */
     void cleanUpCache(long gen) throws InterruptedException {
         cleanUpCache(gen, Math.round(ordinaryWaiting * 1000));
@@ -538,6 +544,7 @@ public class RawLucene {
 
         // avoid nrtManager.waitForGeneration as we would force the reader to reopen too fast        
         Thread.sleep(waiting);
+//        nrtManager.waitForGeneration(gen, true);
         int removed = 0;
         int removedItems = 0;
         Iterator<Entry<Long, Map<Long, IndexOp>>> iter = realTimeCache.entrySet().iterator();
@@ -550,7 +557,8 @@ public class RawLucene {
                 e.getValue().clear();
             }
         }
-        logger.info("removed objects " + removedItems + ", removed maps:" + removed + " older than gen:" + gen);
+        if (removed > 0)
+            logger.info("removed objects " + removedItems + ", removed maps:" + removed + " older than gen:" + gen);
     }
 
     public double getRamBufferSizeMB() {

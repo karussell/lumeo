@@ -46,36 +46,6 @@ public class PerformanceIntegrationTesting extends SimpleLuceneTestBase {
         rand = new Random(1);
     }
 
-    // no concurrent access to flush allowed => otherwise NPE in clearAttributes or exception in NumericUtil
-//    @Test public void testConcurrentFlush() {
-//        exception = null;
-//        int threadCount = 2;
-//        Thread[] threads = new Thread[threadCount];
-//        for (int i = 0; i < threadCount; i++) {
-//            for (int j = 0; j < 1000; j++) {
-//                connect(i);
-//            }
-//            threads[i] = new Thread() {
-//
-//                @Override public void run() {
-//                    try {
-//                        g.flush();
-//                    } catch(Exception ex) {
-//                        exception = ex.getMessage();
-//                    }
-//                }
-//            };
-//            threads[i].start();
-//        }
-//        for (int i = 0; i < threads.length; i++) {
-//            try {
-//                threads[i].join();
-//            } catch (InterruptedException ex) {
-//                throw new RuntimeException(ex);
-//            }
-//        }
-//        assertFalse("Exception occured:" + exception, exception != null);
-//    }
     @Test public void testIndexing() {
         logger.info("warming jvm");
         reinitFileBasedGraph();
@@ -99,8 +69,8 @@ public class PerformanceIntegrationTesting extends SimpleLuceneTestBase {
             long es2 = g.count(Edge.class, RawLucene.TYPE, Edge.class.getSimpleName());
             
 //            v:99838 e:100000
-//            assertEquals(vertices, vs1);
-//            assertEquals(edges, es2);
+            assertEquals(vertices, vs1);
+            assertEquals(edges, es2);
             
             logger.info("indexing:" + indexingTime + ", querying:" + sw.stop().getSeconds() + " v:" + vs1 + " e:" + es2);
             logger.info("v:" + vertices + " e:" + edges);

@@ -168,7 +168,7 @@ public class Mapping {
 
     /** Creates a numerical identification */
     public Field newIdField(String name, long id) {
-        NumericField idField = new NumericField(name, 6, NumericField.TYPE_STORED).setLongValue(id);
+        NumericField idField = new NumericField(name, 6, NumericField.TYPE_STORED).setLongValue(id);        
         return idField;
     }
 

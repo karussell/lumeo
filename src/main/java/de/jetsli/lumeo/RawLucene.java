@@ -557,8 +557,8 @@ public class RawLucene {
                 e.getValue().clear();
             }
         }
-        if (removed > 0)
-            logger.info("removed objects " + removedItems + ", removed maps:" + removed + " older than gen:" + gen);
+//        if (removed > 0)
+//            logger.info("removed objects " + removedItems + ", removed maps:" + removed + " older than gen:" + gen);
     }
 
     public double getRamBufferSizeMB() {

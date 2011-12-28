@@ -25,6 +25,7 @@ import static org.junit.Assert.*;
 import de.jetsli.lumeo.SimpleLuceneTestBase;
 import de.jetsli.lumeo.util.StopWatch;
 import java.util.Random;
+import org.apache.lucene.document.Document;
 
 /**
  *
@@ -32,87 +33,160 @@ import java.util.Random;
  */
 public class PerformanceIntegrationTesting extends SimpleLuceneTestBase {
 
-    List<Vertex> previousVertices;
     Random rand;
-    int TRIALS = 5;
-    String exception;    
-    int edges = 0;
-    int vertices = 0;
+    String exception;
 
     @Override
     public void setUp() {
         super.setUp();
-        previousVertices = new ArrayList<Vertex>();        
         rand = new Random(1);
     }
 
     @Test public void testIndexing() {
-        logger.info("warming jvm");
-        reinitFileBasedGraph();
-        StopWatch sw = new StopWatch().start();
-        for (int i = 0; i < 50000; i++) {
-            connect(i);
-        }        
-        g.getRaw().flush();
-        logger.info("starting benchmark " + sw.stop().getSeconds());
-        float allSecs = 0;
-        for (int trial = 0; trial < TRIALS; trial++) {
-            reinitFileBasedGraph();            
-            sw = new StopWatch("perf" + trial).start();
-            for (int i = 0; i < 100000; i++) {
-                connect(i);
+        new PerfRunner(100000, 27f) {
+
+            List<Vertex> previousVertices = new ArrayList<Vertex>();
+
+            @Override public void reinit() {
+                previousVertices.clear();
+                super.reinit();
             }
-            g.getRaw().flush();
-            float indexingTime = sw.stop().getSeconds();
-            sw = new StopWatch().start();
-            long vs1 = g.count(Vertex.class, RawLucene.TYPE, Vertex.class.getSimpleName());
-            long es2 = g.count(Edge.class, RawLucene.TYPE, Edge.class.getSimpleName());
-            
-//            v:99838 e:100000
-            assertEquals(vertices, vs1);
-            assertEquals(edges, es2);
-            
-            logger.info("indexing:" + indexingTime + ", querying:" + sw.stop().getSeconds() + " v:" + vs1 + " e:" + es2);
-            logger.info("v:" + vertices + " e:" + edges);
-            allSecs += indexingTime;
-            allSecs += sw.getSeconds();
-        }
-        float res = allSecs / TRIALS;
-        logger.info("finished benchmark with " + res + " seconds");
-        assertTrue("mean of benchmark should be less than 15 seconds but was " + res, res < 15f);
+
+            @Override public void innerRun(int trial, int i) {
+                Vertex v1;
+                Vertex v2;
+
+                if (previousVertices.isEmpty() || rand.nextInt(10) < 5) {
+                    v1 = g.addVertex(null);
+                    vertices++;
+                } else
+                    v1 = previousVertices.get(rand.nextInt(previousVertices.size()));
+
+                if (previousVertices.isEmpty() || rand.nextInt(10) < 5) {
+                    v2 = g.addVertex(null);
+                    vertices++;
+                } else
+                    v2 = previousVertices.get(rand.nextInt(previousVertices.size()));
+
+                previousVertices.add(v1);
+                previousVertices.add(v2);
+                if (rand.nextInt(5000) < 10)
+                    previousVertices.clear();
+
+                g.addEdge(null, v1, v2, "e" + i);
+                edges++;
+            }
+
+            @Override protected void finalAssert() {
+                long vs1 = g.count(Vertex.class, RawLucene.TYPE, Vertex.class.getSimpleName());
+                long es2 = g.count(Edge.class, RawLucene.TYPE, Edge.class.getSimpleName());
+
+                logger.info("v:" + vs1 + " e:" + es2);
+                // v:99838 e:100000
+                assertEquals(vertices, vs1);
+                assertEquals(edges, es2);
+            }
+        }.run();
     }
 
-    @Override
-    protected void reinitFileBasedGraph() {
-        super.reinitFileBasedGraph();
-        rand = new Random(1);
-        previousVertices.clear();
-        edges = 0;
-        vertices = 0;
-    }        
+    @Test public void testFindByUserId() {
+        new PerfRunner(300000, 8f) {
 
-    private void connect(int i) {
-        Vertex v1;
-        Vertex v2;
+            StopWatch swPut;
+            StopWatch swLong;
+            StopWatch swStr;
 
-        if (previousVertices.isEmpty() || rand.nextInt(10) < 5) {            
-            v1 = g.addVertex(null);
-            vertices++;
-        } else
-            v1 = previousVertices.get(rand.nextInt(previousVertices.size()));
+            @Override public void reinit() {
+                swPut = new StopWatch("put");
+                swLong = new StopWatch("long");
+                swStr = new StopWatch("str");
+            }
 
-        if (previousVertices.isEmpty() || rand.nextInt(10) < 5) {            
-            v2 = g.addVertex(null);            
-            vertices++;
-        } else
-            v2 = previousVertices.get(rand.nextInt(previousVertices.size()));
+            @Override public void innerRun(int trial, int ii) {
+                String uId = "" + ii;
+                Document doc = g.getRaw().createDocument(uId, ii, Vertex.class);
+                swPut.start();
+                g.getRaw().put(uId, ii, doc);
+                swPut.stop();
 
-        previousVertices.add(v1);
-        previousVertices.add(v2);
-        if (rand.nextInt(5000) < 10)
-            previousVertices.clear();
+                swLong.start();
+                assertNotNull(g.getRaw().findById(ii));
+                swLong.stop();
+            }
 
-        g.addEdge(null, v1, v2, "e" + i);
-        edges++;
+            @Override
+            protected void finalAssert() {
+                for (int ii = 0; ii < items; ii++) {
+                    String uId = "" + ii;
+                    swStr.start();
+                    assertNotNull(g.getRaw().findByUserId(uId));
+                    swStr.stop();
+                }
+                logger.info(swLong + " " + swStr + " " + swPut);
+
+            }
+        }.run();
+    }
+
+    abstract class PerfRunner implements Runnable {
+
+        private StopWatch sw = new StopWatch();
+        protected int edges = 0;
+        protected int vertices = 0;
+        protected final int TRIALS = 3;
+        protected final int items;
+        protected final float expectedTime;
+
+        PerfRunner(int items, float expectedTime) {
+            this.expectedTime = expectedTime;
+            this.items = items;
+        }
+
+        abstract void innerRun(int trial, int i);
+
+        public void reinit() {
+            reinitFileBasedGraph();
+            rand = new Random(1);
+            edges = 0;
+            vertices = 0;
+        }
+
+        public void warmJvm() {
+            logger.info("warming jvm");
+            reinit();
+            sw.start();
+            for (int i = 0; i < items / 2; i++) {
+                innerRun(-1, i);
+            }
+            g.getRaw().flush();
+        }
+
+        @Override public void run() {
+            warmJvm();
+
+            logger.info("starting benchmark " + sw.stop().getSeconds());
+            float allSecs = 0;
+            for (int trial = 0; trial < TRIALS; trial++) {
+                reinit();
+
+                sw = new StopWatch("perf" + trial).start();
+                for (int i = 0; i < items; i++) {
+                    innerRun(trial, i);
+                }
+                g.getRaw().flush();
+                float indexingTime = sw.stop().getSeconds();
+                sw = new StopWatch().start();
+                finalAssert();
+                logger.info("indexing:" + indexingTime + ", querying:" + sw.stop().getSeconds());
+                allSecs += indexingTime;
+                allSecs += sw.getSeconds();
+            }
+            float res = allSecs / TRIALS;
+            logger.info("finished benchmark with " + res + " seconds");
+            assertTrue("mean of benchmark should be less than " + expectedTime + " seconds but was " + res, res < expectedTime);
+        }
+
+        protected void finalAssert() {
+        }
     }
 }

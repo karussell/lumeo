@@ -156,9 +156,14 @@ public class Mapping {
     }
 
     /** Creates a numerical identification */
+<<<<<<< HEAD
     public Fieldable newIdField(String name, long id) {
         NumericField idField = new NumericField(name, 6, store, true).setLongValue(id);
         idField.setIndexOptions(IndexOptions.DOCS_ONLY);
+=======
+    public Field newIdField(String name, long id) {
+        NumericField idField = new NumericField(name, 6, NumericField.TYPE_STORED).setLongValue(id);        
+>>>>>>> 125c1a1... added more fine grained perf analysis
         return idField;
     }
 

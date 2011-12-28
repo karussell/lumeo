@@ -518,9 +518,7 @@ public class RawLucene {
         }
     }
 
-<<<<<<< HEAD
-=======
-    /**
+   /**
      * Nearly always faster than flush but slightly more expensive as it will force the nrtManager 
      * to reopen a reader very fast
      */
@@ -570,7 +568,6 @@ public class RawLucene {
 //            logger.info("removed objects " + removedItems + ", removed maps:" + removed + " older than gen:" + gen);
     }
 
->>>>>>> 125c1a1... added more fine grained perf analysis
     public double getRamBufferSizeMB() {
         return ramBufferSizeMB;
     }
@@ -607,43 +604,4 @@ public class RawLucene {
         return successfulLuceneReads;
     }
 
-    /**
-     * faster than flush but more expensive as it will force the nrtManager to reopen a reader 
-     * very fast
-     */
-    void waitUntilSearchable() {
-        nrtManager.waitForGeneration(latestGen, true);
-    }
-
-    public void flush() {
-        try {
-            cleanUpCache(latestGen);
-        } catch (InterruptedException ex) {
-            throw new RuntimeException(ex);
-        }
-    }
-
-    /**
-     * Very slow compared to waitUntilSearchable but suited for our background thread
-     */
-    void cleanUpCache(long gen) throws InterruptedException {
-        if (nrtManager.getCurrentSearchingGen(true) >= gen) {
-            Thread.sleep(20);
-            return;
-        }
-
-        // avoid nrtManager.waitForGeneration as we would force the reader to reopen too fast        
-        Thread.sleep(Math.round(ordinaryWaiting * 1000));
-        int removed = 0;
-        Iterator<Entry<Long, Map<Long, IndexOp>>> iter = realTimeCache.entrySet().iterator();
-        while (iter.hasNext()) {
-            Entry<Long, Map<Long, IndexOp>> e = iter.next();
-            if (e.getKey() < gen) {
-                iter.remove();
-                removed++;
-                e.getValue().clear();
-            }
-        }
-        logger.info("removed maps:" + removed + " older than gen:" + gen);
-    }
 }

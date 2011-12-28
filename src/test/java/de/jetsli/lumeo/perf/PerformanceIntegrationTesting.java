@@ -42,36 +42,6 @@ public class PerformanceIntegrationTesting extends SimpleLuceneTestBase {
         rand = new Random(1);
     }
 
-    // no concurrent access to flush allowed => otherwise NPE in clearAttributes or exception in NumericUtil
-//    @Test public void testConcurrentFlush() {
-//        exception = null;
-//        int threadCount = 2;
-//        Thread[] threads = new Thread[threadCount];
-//        for (int i = 0; i < threadCount; i++) {
-//            for (int j = 0; j < 1000; j++) {
-//                connect(i);
-//            }
-//            threads[i] = new Thread() {
-//
-//                @Override public void run() {
-//                    try {
-//                        g.flush();
-//                    } catch(Exception ex) {
-//                        exception = ex.getMessage();
-//                    }
-//                }
-//            };
-//            threads[i].start();
-//        }
-//        for (int i = 0; i < threads.length; i++) {
-//            try {
-//                threads[i].join();
-//            } catch (InterruptedException ex) {
-//                throw new RuntimeException(ex);
-//            }
-//        }
-//        assertFalse("Exception occured:" + exception, exception != null);
-//    }
     @Test public void testIndexing() {
         new PerfRunner(100000, 27f) {
 
@@ -108,8 +78,8 @@ public class PerformanceIntegrationTesting extends SimpleLuceneTestBase {
             }
 
             @Override protected void finalAssert() {
-                long vs1 = g.count(Vertex.class, RawLucene.TYPE, Vertex.class.getSimpleName());
-                long es2 = g.count(Edge.class, RawLucene.TYPE, Edge.class.getSimpleName());
+                long vs1 = g.count(RawLucene.TYPE, Vertex.class.getSimpleName());
+                long es2 = g.count(RawLucene.TYPE, Edge.class.getSimpleName());
 
                 logger.info("v:" + vs1 + " e:" + es2);
                 // v:99838 e:100000
@@ -163,7 +133,7 @@ public class PerformanceIntegrationTesting extends SimpleLuceneTestBase {
         private StopWatch sw = new StopWatch();
         protected int edges = 0;
         protected int vertices = 0;
-        protected final int TRIALS = 3;
+        protected final int TRIALS = 5;
         protected final int items;
         protected final float expectedTime;
 
@@ -189,22 +159,6 @@ public class PerformanceIntegrationTesting extends SimpleLuceneTestBase {
                 innerRun(-1, i);
             }
             g.getRaw().flush();
-<<<<<<< HEAD
-            float indexingTime = sw.stop().getSeconds();
-            sw = new StopWatch().start();
-            long vs1 = g.count(RawLucene.TYPE, Vertex.class.getSimpleName());
-            long es2 = g.count(RawLucene.TYPE, Edge.class.getSimpleName());
-            
-//            v:99838 e:100000
-//            assertEquals(vertices, vs1);
-//            assertEquals(edges, es2);
-            
-            logger.info("indexing:" + indexingTime + ", querying:" + sw.stop().getSeconds() + " v:" + vs1 + " e:" + es2);
-            logger.info("v:" + vertices + " e:" + edges);
-            allSecs += indexingTime;
-            allSecs += sw.getSeconds();
-=======
->>>>>>> 125c1a1... added more fine grained perf analysis
         }
 
         @Override public void run() {

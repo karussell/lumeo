@@ -1,1 +1,1 @@
-Lumeo - A top secret experiment
+Lumeo - A top secret experiment.

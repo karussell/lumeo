@@ -40,21 +40,22 @@ public abstract class MyGather {
     }
 
     private int run(int base, IndexReader reader) throws IOException {
-        IndexReader[] subReaders = reader.getSequentialSubReaders();
-        if (subReaders == null) {
-            // atomic/leaf reader
-            continueRun = runLeaf(base, reader);
-            base += reader.maxDoc();
-        } else {
-            // composite reader
-            for (int i = 0; i < subReaders.length; i++) {
-                base = run(base, subReaders[i]);
-                if (!continueRun)
-                    break;
-            }
-        }
-
-        return base;
+        throw new RuntimeException("not implemented in latest 4.0");
+        
+//        IndexReader[] subReaders = reader.getSequentialSubReaders();
+//        if (subReaders == null) {
+//            // atomic/leaf reader
+//            continueRun = runLeaf(base, reader);
+//            base += reader.maxDoc();
+//        } else {
+//            // composite reader
+//            for (int i = 0; i < subReaders.length; i++) {
+//                base = run(base, subReaders[i]);
+//                if (!continueRun)
+//                    break;
+//            }
+//        }
+//        return base;
     }
 
     /**

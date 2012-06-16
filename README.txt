@@ -1,4 +1,4 @@
-Lumeo - Implementing Tinkerpop Blueprints API via Lucene
+Lumeo - Implementing Tinkerpop Blueprints API via Lucene (not yet done - see blueprint api tests!)
 
 Implements a real time cache to avoid commiting after adding a node - see RawLucene.realTimeCache
 

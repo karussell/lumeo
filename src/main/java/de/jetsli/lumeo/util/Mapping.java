@@ -26,10 +26,12 @@ import org.apache.lucene.analysis.core.WhitespaceAnalyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.DateTools;
 import org.apache.lucene.document.Field;
+import org.apache.lucene.document.Field.Store;
 import org.apache.lucene.document.FieldType;
-import org.apache.lucene.document.NumericField;
+import org.apache.lucene.document.LongField;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
+import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FieldInfo.IndexOptions;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.classic.ParseException;
@@ -56,6 +58,7 @@ public class Mapping {
     }
     private final FieldType storedFieldType;
     private final FieldType indexedFieldType;
+    private final FieldType longFieldTypeSI;
     private final Map<String, Type> fieldToTypeMapping;
     private final LumeoPerFieldAnalyzer analyzer;
     private String type;
@@ -78,6 +81,8 @@ public class Mapping {
         indexedFieldType.setStored(true);
         indexedFieldType.setIndexed(true);
         indexedFieldType.freeze();
+        
+        longFieldTypeSI = getLongFieldType(true, true);
 
         analyzer = new LumeoPerFieldAnalyzer(getDefaultAnalyzer());
         fieldToTypeMapping = new LinkedHashMap<String, Type>(4);
@@ -161,14 +166,23 @@ public class Mapping {
         return new Field(name, DateTools.timeToString(value, DateTools.Resolution.MINUTE), indexedFieldType);
     }
 
-    public Field newLongField(String name, long id) {
-        NumericField idField = new NumericField(name, 6, NumericField.TYPE_STORED).setLongValue(id);
-        return idField;
+    public static FieldType getLongFieldType(boolean indexed, boolean stored) {
+        FieldType ft = new FieldType();
+        ft.setNumericType(FieldType.NumericType.LONG);
+        ft.setIndexOptions(FieldInfo.IndexOptions.DOCS_ONLY);
+        ft.setIndexed(indexed);
+        ft.setStored(stored);
+        return ft;
     }
+    
+    public Field newLongField(String name, long id) {
+        LongField idField = new LongField(name, id, longFieldTypeSI);
+        return idField;
+    }        
 
     /** Creates a numerical identification */
     public Field newIdField(String name, long id) {
-        NumericField idField = new NumericField(name, 6, NumericField.TYPE_STORED).setLongValue(id);        
+        LongField idField = new LongField(name, id, longFieldTypeSI);
         return idField;
     }
 

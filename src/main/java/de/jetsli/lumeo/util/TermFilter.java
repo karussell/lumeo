@@ -16,9 +16,10 @@
 package de.jetsli.lumeo.util;
 
 import java.io.IOException;
+
+import org.apache.lucene.index.AtomicReader;
+import org.apache.lucene.index.AtomicReaderContext;
 import org.apache.lucene.index.DocsEnum;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.IndexReader.AtomicReaderContext;
 import org.apache.lucene.search.DocIdSet;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Filter;
@@ -43,7 +44,7 @@ public class TermFilter extends Filter {
     
     @Override
     public DocIdSet getDocIdSet(AtomicReaderContext context, Bits acceptDocs) throws IOException {        
-        IndexReader reader = context.reader;
+        AtomicReader reader = context.reader();
         FixedBitSet result = new FixedBitSet(reader.maxDoc());
         DocsEnum de = reader.termDocsEnum(acceptDocs, fieldName, bytes, false);
         if(de == null)

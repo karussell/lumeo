@@ -1,11 +1,14 @@
 package de.jetsli.lumeo.blueprints;
 
+import java.io.FileInputStream;
+
 import com.tinkerpop.blueprints.BaseTest;
 import com.tinkerpop.blueprints.pgm.Edge;
 import com.tinkerpop.blueprints.pgm.Graph;
 import com.tinkerpop.blueprints.pgm.TestSuite;
 import com.tinkerpop.blueprints.pgm.Vertex;
-import com.tinkerpop.blueprints.pgm.util.graphml.GraphMLReader;
+import com.tinkerpop.blueprints.pgm.util.io.graphml.GraphMLReader;
+//import com.tinkerpop.blueprints.pgm.util.graphml.GraphMLReader;
 import org.junit.Before;
 
 /**
@@ -23,7 +26,8 @@ public class LumeoBenchmarkTestSuite extends TestSuite {
     public void testLuceneGraph() throws Exception {
         double totalTime = 0.0d;
         Graph graph = graphTest.getGraphInstance();
-        GraphMLReader.inputGraph(graph, GraphMLReader.class.getResourceAsStream("graph-example-2.xml"));
+//        GraphMLReader.inputGraph(graph, GraphMLReader.class.getResourceAsStream("graph-example-2.xml"));
+        GraphMLReader.inputGraph(graph, new FileInputStream("data/foo.graphml"));
         graph.shutdown();
 
         for (int i = 0; i < TOTAL_RUNS; i++) {

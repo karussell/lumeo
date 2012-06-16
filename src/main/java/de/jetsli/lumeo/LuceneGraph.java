@@ -10,6 +10,7 @@ import com.tinkerpop.blueprints.pgm.Index;
 import com.tinkerpop.blueprints.pgm.IndexableGraph;
 import com.tinkerpop.blueprints.pgm.TransactionalGraph;
 import com.tinkerpop.blueprints.pgm.Vertex;
+import com.tinkerpop.blueprints.pgm.impls.Parameter;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -25,30 +26,24 @@ import org.slf4j.LoggerFactory;
 
 /**
  * A Blueprints implementation of the Search Engine Apache Lucene (http://lucene.apache.org)
- * 
- * Why is this a nice idea?
- * - Now in 3.5 there is a searchAfter method making deeply searches (at least a bit) better.
- * - Terms are mapped to documents like edges in one node to other nodes (or edges). 
- *   E.g. OrientGraphDB is baked by a document storage
- * - We can make it distributed later on with the help of ElasticSearch. Then even enhance 
- *   searching via stats, facets, putting different indices into different lucene indices etc
- * - We can traverse the graph without the mismatch (two storages) currently seen 
- *   e.g. in Neo4j + Lucene or infinity graph.
- *   Also, in Neo4j it is easy to get nodes from a query but getting relationships is not easy
- *   http://groups.google.com/group/neo4jrb/browse_thread/thread/8f739197886ecec7
- * 
- * Why is this a bad idea?
- * - heavy alpha software
- * - deletes and realtime results are not easy for search engines
- * - no transaction support
- * 
- * TODO
- * - caching is bad at the moment. 
- * - no advanced caching strategies (e.g. measure degree centrality, cluster)
- * - use FieldCache or DocValues for user and long IDs and similar
- * - use several tuning possibilities in Lucene
- * - Reimplement a subset of the lucene functionality by using search trees in the graph?
- * 
+ *
+ * Why is this a nice idea? - Now in 3.5 there is a searchAfter method making deeply searches (at
+ * least a bit) better. - Terms are mapped to documents like edges in one node to other nodes (or
+ * edges). E.g. OrientGraphDB is baked by a document storage - We can make it distributed later on
+ * with the help of ElasticSearch. Then even enhance searching via stats, facets, putting different
+ * indices into different lucene indices etc - We can traverse the graph without the mismatch (two
+ * storages) currently seen e.g. in Neo4j + Lucene or infinity graph. Also, in Neo4j it is easy to
+ * get nodes from a query but getting relationships is not easy
+ * http://groups.google.com/group/neo4jrb/browse_thread/thread/8f739197886ecec7
+ *
+ * Why is this a bad idea? - heavy alpha software - deletes and realtime results are not easy for
+ * search engines - no transaction support
+ *
+ * TODO - caching is bad at the moment. - no advanced caching strategies (e.g. measure degree
+ * centrality, cluster) - use FieldCache or DocValues for user and long IDs and similar - use
+ * several tuning possibilities in Lucene - Reimplement a subset of the lucene functionality by
+ * using search trees in the graph?
+ *
  * @author Peter Karich, info@jetsli.de
  */
 public class LuceneGraph implements TransactionalGraph, IndexableGraph {
@@ -70,13 +65,16 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         rawLucene = rl;
     }
 
-    @Override public <T extends Element> Index<T> createManualIndex(final String indexName, final Class<T> indexClass) {
+    @Override
+    public <T extends Element> Index<T> createManualIndex(String indexName,
+            Class<T> indexClass, Parameter... params) {
         logger.warn("use automatic indices of manual indices");
         return createAutomaticIndex(indexName, indexClass, null);
     }
 
-    @Override public synchronized <T extends Element> AutomaticIndex<T> createAutomaticIndex(final String indexName,
-            final Class<T> indexClass, Set<String> keys) {
+    public synchronized <T extends Element> AutomaticIndex<T> createAutomaticIndex(
+            String indexName, Class<T> indexClass, Set<String> keys, Parameter... arg3) {
+
         LuceneAutomaticIndex index = indices.get(indexClass);
         if (index != null)
             throw new UnsupportedOperationException("index for " + indexClass + " already exists");
@@ -147,6 +145,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
                     throw new RuntimeException("Vertex with user id already exists:" + userId);
             }
 
+            //TODO -MH  haven't we just done this read above half the time?
             Document doc = rawLucene.findByUserId(userId.toString());
             if (doc == null) {
                 if (id < 0)
@@ -233,7 +232,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
         rawLucene.removeById((Long) vertex.getId());
     }
 
-     <T extends Element> Collection<LuceneAutomaticIndex<T>> getAutoIndices(Class<T> cl) {
+    <T extends Element> Collection<LuceneAutomaticIndex<T>> getAutoIndices(Class<T> cl) {
         LuceneAutomaticIndex<T> tmp = (LuceneAutomaticIndex<T>) indices.get(cl);
         if (tmp == null)
             return Collections.EMPTY_LIST;
@@ -289,7 +288,7 @@ public class LuceneGraph implements TransactionalGraph, IndexableGraph {
     Mapping getMapping(String type) {
         return rawLucene.getMapping(type);
     }
-    
+
     Mapping getMapping(Class cl) {
         return rawLucene.getMapping(cl);
     }

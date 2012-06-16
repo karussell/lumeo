@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>    
     <artifactId>lumeo-core</artifactId>
     <groupId>de.jetsli.lumeo</groupId>
-    <version>0.1-SNAPSHOT</version>
+    <version>0.2-SNAPSHOT</version>
     <packaging>jar</packaging>
     <name>Lumeo</name>
     <description>Lucene meets Blueprints</description>
@@ -13,7 +13,7 @@
         <slf4j.version>1.6.3</slf4j.version>
 <!--        <lucene.version>3.5.0</lucene.version>        -->
         <lucene.version>4.0-SNAPSHOT</lucene.version>        
-        <blueprints.version>1.1-SNAPSHOT</blueprints.version>
+        <blueprints.version>1.2</blueprints.version>
     </properties>
     <dependencies>        
         <dependency>
@@ -69,25 +69,6 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-    <repositories>
-        <repository>
-            <id>tinkerpop-repository</id>
-            <name>TinkerPop Maven2 Repository</name>
-            <url>http://tinkerpop.com/maven2</url>
-            <snapshots>
-                <enabled>true</enabled>
-                <updatePolicy>always</updatePolicy>
-            </snapshots>
-        </repository>
-        <repository>
-            <id>karussell_snapshots</id>
-            <url>https://github.com/karussell/mvnrepo/raw/master/snapshots/</url>
-            <snapshots>
-                <enabled>true</enabled>
-                <updatePolicy>always</updatePolicy>
-            </snapshots>
-        </repository>             
-    </repositories>
     <build>
         <directory>${basedir}/target</directory>
         <finalName>${project.artifactId}-${project.version}</finalName>
@@ -133,4 +114,38 @@
             </plugin>
         </plugins>
     </build>
+    
+    <repositories>
+        <repository>
+            <id>tinkerpop-repository</id>
+            <name>TinkerPop Maven2 Repository</name>
+            <url>http://tinkerpop.com/maven2</url>
+            <snapshots>
+                <enabled>true</enabled>
+                <updatePolicy>always</updatePolicy>
+            </snapshots>
+        </repository>
+        <repository>
+            <id>lucene-repository</id>
+            <name>Lucene Maven</name>
+            <url>https://repository.apache.org/snapshots/</url>
+            <snapshots>
+                <enabled>true</enabled>
+                <!--
+                <updatePolicy>always</updatePolicy>
+                -->
+            </snapshots>
+        </repository>
+        
+        <!--
+        <repository>
+            <id>karussell_snapshots</id>
+            <url>https://github.com/karussell/mvnrepo/raw/master/snapshots/</url>
+            <snapshots>
+                <enabled>true</enabled>
+                <updatePolicy>always</updatePolicy>
+            </snapshots>
+        </repository>             
+        -->
+    </repositories>
 </project>

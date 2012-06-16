@@ -5,7 +5,8 @@ import com.tinkerpop.blueprints.pgm.Edge;
 import com.tinkerpop.blueprints.pgm.Vertex;
 import com.tinkerpop.blueprints.pgm.impls.StringFactory;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.NumericField;
+import org.apache.lucene.document.LongField;
+//import org.apache.lucene.document.NumericField;
 
 /**
  * @author Peter Karich, info@jetsli.de
@@ -30,7 +31,7 @@ public class LuceneEdge extends LuceneElement implements Edge {
     }
 
     @Override public Vertex getOutVertex() {
-        long id = ((NumericField) getRaw().getField(RawLucene.VERTEX_OUT)).numericValue().longValue();
+        long id = ((LongField) getRaw().getField(RawLucene.VERTEX_OUT)).numericValue().longValue();
         Document doc = g.getRaw().findById(id);
         if (doc == null)
             throw new NullPointerException("Didn't found out vertex of edge with id " + id);
@@ -38,7 +39,7 @@ public class LuceneEdge extends LuceneElement implements Edge {
     }
 
     @Override public Vertex getInVertex() {
-        long id = ((NumericField) getRaw().getField(RawLucene.VERTEX_IN)).numericValue().longValue();
+        long id = ((LongField) getRaw().getField(RawLucene.VERTEX_IN)).numericValue().longValue();
         Document doc = g.getRaw().findById(id);
         if (doc == null)
             throw new NullPointerException("Didn't found in vertex of edge with id " + id);

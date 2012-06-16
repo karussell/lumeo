@@ -16,7 +16,7 @@
 package de.jetsli.lumeo;
 
 import java.io.File;
-import java.io.IOException;
+
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.index.IndexWriter;
@@ -25,7 +25,8 @@ import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.NRTManager;
-import org.apache.lucene.search.SearcherWarmer;
+import org.apache.lucene.search.NRTManager.TrackingIndexWriter;
+import org.apache.lucene.search.SearcherFactory;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.util.Version;
@@ -40,17 +41,15 @@ public class ReadESIndexViaLucene {
 
     public static void main(String[] args) throws Exception {
         Logger logger = LoggerFactory.getLogger(ReadESIndexViaLucene.class);
-        IndexWriterConfig cfg = new IndexWriterConfig(Version.LUCENE_34, new StandardAnalyzer(Version.LUCENE_34));
+        IndexWriterConfig cfg = new IndexWriterConfig(Version.LUCENE_40, new StandardAnalyzer(Version.LUCENE_40));
         IndexWriter writer = new IndexWriter(FSDirectory.open(new File("../elasticsearch/data/jetwickcluster/nodes/0/indices/twindex/0/index")),
-                cfg);        
-        NRTManager nrtManager = new NRTManager(writer, new SearcherWarmer() {
-
-            @Override
-            public void warm(IndexSearcher s) throws IOException {
-                // TODO get some random vertices via getVertices?
-            }
+                cfg);     
+        TrackingIndexWriter trackingWriter = new TrackingIndexWriter(writer);
+        
+        NRTManager nrtManager = new NRTManager(trackingWriter, new SearcherFactory() {
+               // TODO warm up by getting some random vertices via getVertices?
         });
-        IndexSearcher searcher = nrtManager.getSearcherManager(true).acquire();
+        IndexSearcher searcher = nrtManager.acquire();
         try {
             TopDocs td = searcher.search(new MatchAllDocsQuery(), 10);
             logger.info("results:" + td.totalHits);
@@ -60,7 +59,7 @@ public class ReadESIndexViaLucene {
             }
             logger.info(doc.get("tweet/tw"));
         } finally {
-            nrtManager.getSearcherManager(true).release(searcher);
+            nrtManager.release(searcher);
         }
     }
 }

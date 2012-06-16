@@ -15,18 +15,18 @@
  */
 package de.jetsli.lumeo.util;
 
-import org.apache.lucene.search.NRTManagerReopenThread;
-import java.io.IOException;
-import org.apache.lucene.search.NRTManager;
-import org.apache.lucene.search.SearcherWarmer;
+import de.jetsli.lumeo.RawLucene;
+import static org.junit.Assert.assertEquals;
+
 import org.apache.lucene.analysis.core.KeywordAnalyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.NumericField;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.Term;
+import org.apache.lucene.document.FieldType;
+import org.apache.lucene.document.LongField;
+import org.apache.lucene.index.*;
 import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.NRTManager;
+import org.apache.lucene.search.NRTManager.TrackingIndexWriter;
+import org.apache.lucene.search.SearcherFactory;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.RAMDirectory;
@@ -34,7 +34,6 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.NumericUtils;
 import org.apache.lucene.util.Version;
 import org.junit.Test;
-import static org.junit.Assert.*;
 
 /**
  *
@@ -60,45 +59,47 @@ public class LuceneHelperTest {
 
     @Test public void testTermMatching() throws Exception {
         RAMDirectory dir = new RAMDirectory();
-        IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(Version.LUCENE_40, new KeywordAnalyzer()));
-
-        Document d = new Document();
-        d.add(new NumericField("id", 6, NumericField.TYPE_STORED).setLongValue(1234));
-        d.add(new NumericField("tmp", 6, NumericField.TYPE_STORED).setLongValue(1111));
+        IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(RawLucene.VERSION, new KeywordAnalyzer()));
+        Document d = new Document();        
+        
+        FieldType ft = Mapping.getLongFieldType(true, true);
+        d.add(new LongField("id", 1234, ft));
+        d.add(new LongField("tmp", 1111, ft));
         w.addDocument(d);
 
         d = new Document();
-        d.add(new NumericField("id", 6, NumericField.TYPE_STORED).setLongValue(1234));
-        d.add(new NumericField("tmp", 6, NumericField.TYPE_STORED).setLongValue(2222));
+        d.add(new LongField("id", 1234, ft));
+        d.add(new LongField("tmp", 2222, ft));
         w.updateDocument(getTerm("id", 1234), d);
 
         d = new Document();
-        d.add(new NumericField("id", 6, NumericField.TYPE_STORED).setLongValue(0));
+        d.add(new LongField("id", 0, ft));
         w.addDocument(d);
         w.commit();
 
-        IndexReader reader = IndexReader.open(w, true);
+        IndexReader reader = DirectoryReader.open(w, true);
         IndexSearcher searcher = new IndexSearcher(reader);
 
         BytesRef bytes = new BytesRef();
         NumericUtils.longToPrefixCoded(1234, 0, bytes);
         TopDocs td = searcher.search(new TermQuery(new Term("id", bytes)), 10);
         assertEquals(1, td.totalHits);
-        assertEquals("1234", searcher.doc(td.scoreDocs[0].doc).get("id"));
-        assertEquals("2222", searcher.doc(td.scoreDocs[0].doc).get("tmp"));
+        assertEquals(1234L, searcher.doc(td.scoreDocs[0].doc).getField("id").numericValue());
+        assertEquals(2222L, searcher.doc(td.scoreDocs[0].doc).getField("tmp").numericValue());
         w.close();
     }
 
     @Test public void testTermMatchingNrt() throws Exception {
         RAMDirectory dir = new RAMDirectory();
         IndexWriterConfig cfg = new IndexWriterConfig(Version.LUCENE_40, new KeywordAnalyzer());
-        IndexWriter w = new IndexWriter(dir, cfg);
+        IndexWriter unwrappedWriter = new IndexWriter(dir, cfg);
+        TrackingIndexWriter w=new TrackingIndexWriter(unwrappedWriter);
 
-        NRTManager nrtManager = new NRTManager(w, new SearcherWarmer() {
+        NRTManager nrtManager = new NRTManager(w, new SearcherFactory() {
 
-            @Override public void warm(IndexSearcher s) throws IOException {
-                // TODO do some warming
-            }
+//            @Override public void warm(IndexSearcher s) throws IOException {
+//                // TODO do some warming
+//            }
         });
 
         LumeoPerFieldAnalyzer analyzer = new LumeoPerFieldAnalyzer(Mapping.KEYWORD_ANALYZER);
@@ -116,38 +117,39 @@ public class LuceneHelperTest {
 //        reopenThread.setDaemon(true);
 //        reopenThread.start();
 
+        FieldType ft = Mapping.getLongFieldType(true, true);
         Document d = new Document();
-        d.add(new NumericField("id", 6, NumericField.TYPE_STORED).setLongValue(1234));
-        d.add(new NumericField("tmp", 6, NumericField.TYPE_STORED).setLongValue(1111));
-        long latestGen = nrtManager.updateDocument(getTerm("id", 1234), d, analyzer);
+        d.add(new LongField("id", 1234, ft));
+        d.add(new LongField("tmp", 1111, ft));
+        long latestGen = w.updateDocument(getTerm("id", 1234), d, analyzer);
 
         d = new Document();
-        d.add(new NumericField("id", 6, NumericField.TYPE_STORED).setLongValue(1234));
-        d.add(new NumericField("tmp", 6, NumericField.TYPE_STORED).setLongValue(2222));
-        latestGen = nrtManager.updateDocument(getTerm("id", 1234), d, analyzer);
+        d.add(new LongField("id", 1234, ft));
+        d.add(new LongField("tmp", 2222, ft));
+        latestGen = w.updateDocument(getTerm("id", 1234), d, analyzer);
 
         d = new Document();
-        d.add(new NumericField("id", 6, NumericField.TYPE_STORED).setLongValue(0));
-        latestGen = nrtManager.updateDocument(getTerm("id", 0), d, analyzer);
+        d.add(new LongField("id", 0, ft));
+        latestGen = w.updateDocument(getTerm("id", 0), d, analyzer);
 
-        w.commit();
-        nrtManager.maybeReopen(true);
+        w.getIndexWriter().commit();
+        nrtManager.maybeRefreshBlocking();
 //        nrtManager.waitForGeneration(latestGen, true);
 
-        IndexSearcher searcher = nrtManager.getSearcherManager(true).acquire();
+        IndexSearcher searcher = nrtManager.acquire();
         try {
             TopDocs td = searcher.search(new TermQuery(getTerm("id", 1234)), 10);
             assertEquals(1, td.totalHits);
             assertEquals(1, td.scoreDocs.length);
-            assertEquals("1234", searcher.doc(td.scoreDocs[0].doc).get("id"));
-            assertEquals("2222", searcher.doc(td.scoreDocs[0].doc).get("tmp"));
+            assertEquals(1234L, searcher.doc(td.scoreDocs[0].doc).getField("id").numericValue());
+            assertEquals(2222L, searcher.doc(td.scoreDocs[0].doc).getField("tmp").numericValue());
 
             td = searcher.search(new TermQuery(getTerm("id", 0)), 10);
             assertEquals(1, td.totalHits);
         } finally {
 //            reopenThread.close();
-            nrtManager.getSearcherManager(true).release(searcher);
-            w.close();
+            nrtManager.release(searcher);
+            w.getIndexWriter().close();
         }
     }
 

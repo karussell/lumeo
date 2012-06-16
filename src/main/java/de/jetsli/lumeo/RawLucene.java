@@ -1,26 +1,19 @@
 package de.jetsli.lumeo;
 
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more contributor license
+ * agreements. See the NOTICE file distributed with this work for additional information regarding
+ * copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the License. You may obtain a
+ * copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing permissions and limitations under
+ * the License.
  */
-import de.jetsli.lumeo.util.IndexOp;
-import de.jetsli.lumeo.util.LuceneHelper;
-import de.jetsli.lumeo.util.Mapping;
-import de.jetsli.lumeo.util.MyGather;
-import de.jetsli.lumeo.util.SearchExecutor;
 import java.io.File;
 import java.io.IOException;
 import java.util.Iterator;
@@ -29,45 +22,50 @@ import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.NumericField;
+import org.apache.lucene.document.LongField;
+import org.apache.lucene.index.AtomicReader;
+import org.apache.lucene.index.AtomicReaderContext;
+import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.DocsEnum;
-import org.apache.lucene.index.Fields;
-import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.LogByteSizeMergePolicy;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.index.Terms;
-import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.NRTManager;
+import org.apache.lucene.search.NRTManager.TrackingIndexWriter;
 import org.apache.lucene.search.NRTManagerReopenThread;
-import org.apache.lucene.search.SearcherManager;
-import org.apache.lucene.search.SearcherWarmer;
+import org.apache.lucene.search.SearcherFactory;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
-import org.apache.lucene.store.NRTCachingDirectory;
-import org.apache.lucene.util.Bits.MatchAllBits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.Version;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import de.jetsli.lumeo.util.IndexOp;
+import de.jetsli.lumeo.util.LuceneHelper;
+import de.jetsli.lumeo.util.Mapping;
+import de.jetsli.lumeo.util.SearchExecutor;
+import org.apache.lucene.document.FieldType;
+import org.apache.lucene.index.*;
+
 /**
- * Uses a buffer to accumulate uncommitted state. Should stay independent of Blueprints API.  
- * 
+ * Uses a buffer to accumulate uncommitted state. Should stay independent of Blueprints API.
+ *
  * Minor impressions taken from
  * http://code.google.com/p/graphdb-load-tester/source/browse/trunk/src/com/tinkerpop/graph/benchmark/index/LuceneKeyToNodeIdIndexImpl.java
- * 
- * -> still use batchBuffer to support realtime get and to later support versioning
- * -> use near real time reader, no need for commit 
- * -> no bloomfilter then it is 1 sec (>10%) faster for testIndexing and less memory usage
- *    TODO check if traversal benchmark is also faster
- * 
+ *
+ * -> still use batchBuffer to support realtime get and to later support versioning -> use near real
+ * time reader, no need for commit -> no bloomfilter then it is 1 sec (>10%) faster for testIndexing
+ * and less memory usage TODO check if traversal benchmark is also faster
+ *
  * @author Peter Karich, info@jetsli.de
  */
 public class RawLucene {
@@ -84,7 +82,7 @@ public class RawLucene {
     public static final String VERTEX_OUT = "_vout";
     public static final String VERTEX_IN = "_vin";
     public static final Version VERSION = Version.LUCENE_40;
-    private IndexWriter writer;
+    private TrackingIndexWriter writer;
     private Directory dir;
     private NRTManager nrtManager;
     //Avoid Lucene performing "mega merges" with a finite limit on segments sizes that can be merged
@@ -113,7 +111,7 @@ public class RawLucene {
     double ordinaryWaiting = 5.0;
 
     public RawLucene(String path) {
-        try {            
+        try {
             // if indexing rate is lowish but reopen rate is highish
             // dir = new NRTCachingDirectory(FSDirectory.open(new File(path)), 5, 60);
             dir = FSDirectory.open(new File(path));
@@ -159,15 +157,18 @@ public class RawLucene {
 //            });
 
             // cfg.setMaxThreadStates(8);
-            boolean create = !IndexReader.indexExists(dir);
+            boolean create = !DirectoryReader.indexExists(dir);
             cfg.setOpenMode(create ? IndexWriterConfig.OpenMode.CREATE : IndexWriterConfig.OpenMode.APPEND);
-            writer = new IndexWriter(dir, cfg);
-            nrtManager = new NRTManager(writer, new SearcherWarmer() {
 
-                @Override
-                public void warm(IndexSearcher s) throws IOException {
-                    // TODO get some random vertices via getVertices?
-                }
+            //wrap the writer with a tracking index writer
+            writer = new TrackingIndexWriter(new IndexWriter(dir, cfg));
+
+            nrtManager = new NRTManager(writer, new SearcherFactory() {
+//              @Override
+//              public IndexSearcher newSearcher(IndexReader reader) throws IOException {
+//                //TODO do some kind of warming here?
+//                return new IndexSearcher(reader);
+//              }              
             });
 
             getCurrentRTCache(latestGen);
@@ -191,10 +192,11 @@ public class RawLucene {
     }
 
     long getId(Document doc) {
-        return ((NumericField) doc.getField(ID)).numericValue().longValue();
+        return ((LongField) doc.getField(ID)).numericValue().longValue();
     }
 
     public Document findById(final long id) {
+        //Check cache
         IndexOp result = getCurrentRTCache(latestGen).get(id);
         if (result != null) {
             if (result.type == IndexOp.Type.DELETE)
@@ -206,14 +208,19 @@ public class RawLucene {
 
             @Override public Document execute(IndexSearcher searcher) throws Exception {
                 // TODO optimize via indexReader.termDocsEnum !?
-                TopDocs td = searcher.search(new TermQuery(new Term(ID, LuceneHelper.newRefFromLong(id))), 1);
-                if (td.totalHits == 0)
-                    return null;
-
-                if (td.totalHits > 1)
-                    throw new IllegalStateException("User id is not the only one:" + id);
-
-                return searcher.doc(td.scoreDocs[0].doc);
+                IndexReaderContext trc = searcher.getTopReaderContext();
+                AtomicReaderContext[] arc = trc.leaves();
+                for (int i = 0; i < arc.length; i++) {
+                    AtomicReader subreader = arc[i].reader();
+                    DocsEnum docs = subreader.terms(UID).iterator(null).docs(subreader.getLiveDocs(), null, false);
+                    if (docs != null) {
+                        int docID = docs.nextDoc();
+                        if (docID != DocsEnum.NO_MORE_DOCS) {
+                            return subreader.document(docID);
+                        }
+                    }
+                }
+                return null;
             }
         });
     }
@@ -221,43 +228,55 @@ public class RawLucene {
     public Document findByUserId(final String uId) {
         return searchSomething(new SearchExecutor<Document>() {
 
-            Document doc;
-
             @Override public Document execute(final IndexSearcher searcher) throws IOException {
                 final BytesRef bytes = new BytesRef(uId);
-                new MyGather(searcher.getIndexReader()) {
+                Document doc = null;
+                //IndexReaderContext trc = searcher.getTopReaderContext();
+                //trc.children();
+                
+                //TODO -MH  search subreaders - share common subreader code in findByID?
 
-                    @Override protected boolean runLeaf(int base, IndexReader leaf) throws IOException {
-                        DocsEnum docs = leaf.termDocsEnum(leaf.getLiveDocs(), UID, bytes, false);
-                        if (docs == null)
-                            return true;
+                //Hopefully Lucene should bail after collecting our result of 1
+                TopDocs results = searcher.search(new TermQuery(new Term(UID, bytes)), 1);
+                if (results.totalHits > 1) {
+                    throw new IllegalStateException("Document with " + UID + "=" + uId + " not the only one");
+                }
+                if (results.totalHits == 1) {
+                    doc = searcher.document(results.scoreDocs[0].doc, null);
+                }
 
-                        int docID = docs.nextDoc();
-                        if (docID == DocsEnum.NO_MORE_DOCS)
-                            return true;
-
-                        if (docs.nextDoc() != DocsEnum.NO_MORE_DOCS)
-                            throw new IllegalStateException("Document with " + UID + "=" + uId + " not the only one");
-
-                        doc = searcher.doc(base + docID);
-                        return false;
-                    }
-                }.run();
+//                new MyGather(searcher.getIndexReader()) {
+//
+//                    @Override protected boolean runLeaf(int base, AtomicReader leaf) throws IOException {
+//                        DocsEnum docs = leaf.termDocsEnum(leaf.getLiveDocs(), UID, bytes, false);
+//                        if (docs == null)
+//                            return true;
+//
+//                        int docID = docs.nextDoc();
+//                        if (docID == DocsEnum.NO_MORE_DOCS)
+//                            return true;
+//
+//                        if (docs.nextDoc() != DocsEnum.NO_MORE_DOCS)
+//                            throw new IllegalStateException("Document with " + UID + "=" + uId + " not the only one");
+//
+//                        doc = searcher.doc(base + docID);
+//                        return false;
+//                    }
+//                }.run();
                 return doc;
             }
         });
     }
 
     public <T> T searchSomething(SearchExecutor<T> exec) {
-        SearcherManager sm = nrtManager.getSearcherManager(true);
-        IndexSearcher searcher = sm.acquire();
+        IndexSearcher searcher = nrtManager.acquire();
         try {
             return (T) exec.execute(searcher);
         } catch (Exception e) {
             throw new RuntimeException(e);
         } finally {
             try {
-                sm.release(searcher);
+                nrtManager.release(searcher);
             } catch (IOException ex) {
                 throw new RuntimeException(ex);
             }
@@ -302,9 +321,9 @@ public class RawLucene {
 //                writer.commit();
             } catch (Exception ex) {
                 logger.warn("Couldn't commit changes to writer", ex);
-                writer.rollback();
+                writer.getIndexWriter().rollback();
             }
-            writer.close();
+            writer.getIndexWriter().close();
             dir.close();
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -340,7 +359,7 @@ public class RawLucene {
 
     long removeById(final long id) {
         try {
-            latestGen = nrtManager.deleteDocuments(new Term(ID, LuceneHelper.newRefFromLong(id)));
+            latestGen = writer.deleteDocuments(new Term(ID, LuceneHelper.newRefFromLong(id)));
             getCurrentRTCache(latestGen).put(id, new IndexOp(IndexOp.Type.DELETE));
             return latestGen;
         } catch (Exception ex) {
@@ -354,7 +373,7 @@ public class RawLucene {
             if (type == null)
                 throw new UnsupportedOperationException("Document needs to have a type associated");
             Mapping m = getMapping(type);
-            latestGen = nrtManager.updateDocument(new Term(ID, LuceneHelper.newRefFromLong(id)),
+            latestGen = writer.updateDocument(new Term(ID, LuceneHelper.newRefFromLong(id)),
                     newDoc, m.getCombinedAnalyzer());
             getCurrentRTCache(latestGen).put(id, new IndexOp(newDoc, IndexOp.Type.UPDATE));
             return latestGen;
@@ -380,23 +399,25 @@ public class RawLucene {
     void refresh() {
         try {
             // use waitForGeneration instead?
-            writer.commit();
-            nrtManager.maybeReopen(true);
+//            writer.commit();
+            writer.getIndexWriter().commit();
+            nrtManager.maybeRefreshBlocking();
 //            nrtManager.waitForGeneration(latestGen, true);
         } catch (Exception ex) {
             throw new RuntimeException();
         }
     }
 
-    /** You'll need to call releaseUnmanagedSearcher afterwards */
+    /**
+     * You'll need to call releaseUnmanagedSearcher afterwards
+     */
     IndexSearcher newUnmanagedSearcher() {
-        SearcherManager sm = nrtManager.getSearcherManager(true);
-        return sm.acquire();
+        return nrtManager.acquire();
     }
 
     void releaseUnmanagedSearcher(IndexSearcher searcher) {
         try {
-            nrtManager.getSearcherManager(true).release(searcher);
+            nrtManager.release(searcher);
         } catch (IOException ex) {
             throw new RuntimeException(ex);
         }
@@ -495,7 +516,7 @@ public class RawLucene {
                 } catch (OutOfMemoryError er) {
                     logger.error("Now closing writer due to OOM", er);
                     try {
-                        writer.close();
+                        writer.getIndexWriter().close();
                     } catch (Exception ex) {
                         logger.error("Error while closing writer", ex);
                     }
@@ -512,11 +533,11 @@ public class RawLucene {
     }
 
     /**
-     * Nearly always faster than flush but slightly more expensive as it will force the nrtManager 
+     * Nearly always faster than flush but slightly more expensive as it will force the nrtManager
      * to reopen a reader very fast
      */
     void waitUntilSearchable() {
-        nrtManager.waitForGeneration(latestGen, true);
+        nrtManager.waitForGeneration(latestGen);
     }
 
     public void flush() {
@@ -528,15 +549,15 @@ public class RawLucene {
     }
 
     /**
-     * Very slow compared to waitUntilSearchable but slightly more efficient (~3%) for indexing 
-     * and so it is suited for our background thread
+     * Very slow compared to waitUntilSearchable but slightly more efficient (~3%) for indexing and
+     * so it is suited for our background thread
      */
     void cleanUpCache(long gen) throws InterruptedException {
         cleanUpCache(gen, Math.round(ordinaryWaiting * 1000));
     }
 
     void cleanUpCache(long gen, long waiting) throws InterruptedException {
-        if (nrtManager.getCurrentSearchingGen(true) >= gen) {
+        if (nrtManager.getCurrentSearchingGen() >= gen) {
             // do not max out the CPU if called in a loop
             Thread.sleep(20);
             return;
@@ -599,5 +620,5 @@ public class RawLucene {
 
     public NRTManager getNrtManager() {
         return nrtManager;
-    }
+    }    
 }

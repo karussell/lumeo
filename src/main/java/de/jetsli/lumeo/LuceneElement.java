@@ -9,7 +9,7 @@ import java.util.HashSet;
 import java.util.Set;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.NumericField;
+import org.apache.lucene.document.LongField;
 import org.apache.lucene.index.IndexableField;
 
 /**
@@ -39,7 +39,7 @@ public abstract class LuceneElement implements Element {
             throw new RuntimeException(key + StringFactory.PROPERTY_EXCEPTION_MESSAGE);
 
         try {
-            Object oldValue = this.getProperty(key);            
+            Object oldValue = this.getProperty(key);
             for (LuceneAutomaticIndex autoIndex : this.g.getAutoIndices(this.getClass())) {
                 autoIndex.autoUpdate(key, value, oldValue, this);
             }
@@ -80,7 +80,7 @@ public abstract class LuceneElement implements Element {
     }
 
     @Override public Object getId() {
-        return ((NumericField) rawElement.getField(RawLucene.ID)).numericValue().longValue();
+        return (Long) rawElement.getField(RawLucene.ID).numericValue();
     }
 
     public String getType() {
